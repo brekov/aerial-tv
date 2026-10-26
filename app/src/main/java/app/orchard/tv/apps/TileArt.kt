@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.drawable.BitmapDrawable
 import androidx.annotation.RequiresApi
 import android.os.Build
 import android.graphics.drawable.Drawable
@@ -50,6 +51,8 @@ class TileArt(
      * one textured draw per frame, which matters on TV chips.
      */
     val backdrop: ImageBitmap,
+    /** A stand-in in the app's color while its picture is still being read (see AppCatalog.load). */
+    val placeholder: Boolean = false,
 )
 
 /** Firmware apps Aerial draws its own tile for, each in the color that tells the kind apart. */
@@ -62,7 +65,11 @@ enum class SystemTile(top: Long, bottom: Long, val glyph: Glyph) {
     Calendar(0xFFFF6B5E, 0xFFD02A1E, Glyph.Calendar),
     Cast(0xFF8E8CFF, 0xFF4744D0, Glyph.Cast),
     Security(0xFF3ED97A, 0xFF138A47, Glyph.Shield),
-    Browser(0xFF64D2FF, 0xFF0A7BEA, Glyph.Globe);
+    Browser(0xFF64D2FF, 0xFF0A7BEA, Glyph.Globe),
+    /** The TV's own launcher, where it has no entry of its own (AppCatalog.stockLaunchers). */
+    Home(0xFF7D7AFF, 0xFF3634A3, Glyph.Home),
+    /** The stock launcher's children's mode (AppCatalog.shortcuts). */
+    Kids(0xFFFF8FB1, 0xFFE0457B, Glyph.Kids);
 
     val top = top.toInt()
     val bottom = bottom.toInt()
@@ -95,14 +102,26 @@ object TileArtFactory {
     /** The resolution an icon is sampled at to find its logo. */
     private const val SAMPLE = 256
 
+    /** How far from a pixel [cutOut] looks for the plate and the logo: an edge's antialiasing is a pixel or two wide. */
+    private const val EDGE_RADIUS = 2
+
     private const val GRAPHITE_TOP = 0xFF3A3A3C.toInt()
     private const val GRAPHITE_BOTTOM = 0xFF242426.toInt()
 
+    /**
+     * A banner that is a picture keeps its own pixels (up to twice the tile), cut to 16:9 only, so
+     * the tile resamples it once on its way to the screen. Drawn at W×H first, a 320×180 banner was
+     * resampled three times (320 → 352 → tile → focus scale) and read soft beside launchers that
+     * show it directly (issue #307, 奇异果 on Xiaomi MiTV-MFTR0).
+     */
     fun fromBanner(banner: Drawable): TileArt {
-        val back = createBitmap(W, H)
+        val src = (banner as? BitmapDrawable)?.bitmap
+        val w = src?.width?.coerceAtMost(2 * W) ?: W
+        val h = w * 9 / 16
+        val back = createBitmap(w, h)
         Canvas(back).apply {
             drawColor(GRAPHITE_BOTTOM)
-            drawCover(banner, W, H)
+            if (src != null) drawCover(banner, w, h, src.width, src.height) else drawCover(banner, w, h)
         }
         return finish(back, null)
     }
@@ -111,7 +130,7 @@ object TileArtFactory {
      * A TV input's tile, in the spirit of an app icon: a white mark over a gradient, the input's
      * name under it and [sub] (the port under a chosen name, or the HDMI-CEC device name) as a
      * second line. The connector's glyph over a color that tells the kind apart (HDMI blue, DP
-     * violet, tuner teal, AV amber), or with a [device] chosen from the tile's menu, that device's
+     * violet, tuner teal, AV amber, USB rose), or with a [device] chosen from the tile's menu, that device's
      * colours and mark. A null [label] shows the mark alone, larger: for a chosen device, whose
      * mark says what it is.
      */
@@ -121,11 +140,13 @@ object TileArtFactory {
             app.orchard.tv.system.SourceKind.DisplayPort -> 0xFF6E5BD8.toInt() to 0xFF3A2D86.toInt()
             app.orchard.tv.system.SourceKind.Tuner -> 0xFF1FA88E.toInt() to 0xFF0E5C55.toInt()
             app.orchard.tv.system.SourceKind.Av -> 0xFFE0912F.toInt() to 0xFF9A4F12.toInt()
+            app.orchard.tv.system.SourceKind.Usb -> 0xFFD8457A.toInt() to 0xFF861E47.toInt()
             app.orchard.tv.system.SourceKind.Other -> 0xFF5E6470.toInt() to 0xFF30343C.toInt()
         }
         val data = device?.mark ?: when (kind) {
             app.orchard.tv.system.SourceKind.Hdmi, app.orchard.tv.system.SourceKind.DisplayPort -> app.orchard.tv.ui.theme.GlyphPaths.HDMI
             app.orchard.tv.system.SourceKind.Tuner -> app.orchard.tv.ui.theme.GlyphPaths.ANTENNA
+            app.orchard.tv.system.SourceKind.Usb -> app.orchard.tv.ui.theme.GlyphPaths.USB
             else -> app.orchard.tv.ui.theme.GlyphPaths.COMPONENT
         }
         val path = androidx.core.graphics.PathParser.createPathFromPathData(data)
@@ -371,22 +392,62 @@ object TileArtFactory {
 
     /**
      * Keeps only what stands out from the plate (colored [top] to [bottom] across [logo]) in a
-     * logo layer, its edges eased by how far each pixel is from the plate color; in white if asked.
+     * logo layer; in white if asked.
+     *
+     * Inside the logo a pixel is kept by how far it is from the plate color, so a faint part
+     * (当贝's "DANGBEI.COM") stays faint and a shaded one (a light-blue fold in a white logo)
+     * stays whole. On the logo's edge, next to the plate, a pixel is the logo and the plate mixed:
+     * there its distance against the logo's nearby distance says how much of it is logo, which
+     * keeps the icon's own antialiasing. (Edges used to go through the same fixed ramp as the
+     * inside, 24 to 96 in color distance: a logo far from its plate, white on red at 517 (#640:
+     * 网易云音乐), had every edge pixel past a fifth logo fully opaque, and curves came out
+     * stepped.)
      */
     private fun cutOut(layer: Bitmap, logo: RectF, top: Int, bottom: Int, white: Boolean) {
         val px = IntArray(W * H).also { layer.getPixels(it, 0, W, 0, 0, W, H) }
+        val d = IntArray(W * H)
+        val plates = IntArray(H) { y -> ColorUtils.blendARGB(top, bottom, ((y - logo.top) / logo.height()).coerceIn(0f, 1f)) }
+        for (y in 0 until H) for (x in 0 until W) {
+            val i = y * W + x
+            d[i] = if (px[i] ushr 24 == 0) 0 else distance(px[i], plates[y])
+        }
+        fun inside(distance: Int) = ((distance - 24) / 72f).coerceIn(0f, 1f)
+        val r = EDGE_RADIUS
         for (y in 0 until H) {
-            val plate = ColorUtils.blendARGB(top, bottom, ((y - logo.top) / logo.height()).coerceIn(0f, 1f))
             for (x in 0 until W) {
                 val i = y * W + x
                 val c = px[i]
                 if (c ushr 24 == 0) continue
-                val keep = ((distance(c, plate) - 24) / 72f).coerceIn(0f, 1f)
+                // The plate within reach makes this an edge pixel; the farthest pixel within reach
+                // is the logo there.
+                var nearPlate = false
+                var local = 0
+                for (yy in maxOf(0, y - r)..minOf(H - 1, y + r)) for (xx in maxOf(0, x - r)..minOf(W - 1, x + r)) {
+                    val v = d[yy * W + xx]
+                    if (v <= 24) nearPlate = true
+                    if (v > local) local = v
+                }
+                val share = if (nearPlate && local > 24) ((d[i] - 12f) / (local * 0.95f - 12f)).coerceIn(0f, 1f) else 1f
+                val keep = if (nearPlate) share * inside(local) else inside(d[i])
                 val a = ((c ushr 24) * keep).roundToInt()
-                px[i] = (a shl 24) or (if (white) 0xFFFFFF else c and 0xFFFFFF)
+                val rgb = when {
+                    white -> 0xFFFFFF
+                    share > 0f && share < 1f -> unmix(c, plates[y], share)
+                    else -> c and 0xFFFFFF
+                }
+                px[i] = (a shl 24) or rgb
             }
         }
         layer.setPixels(px, 0, W, 0, 0, W, H)
+    }
+
+    /** The logo's own color in an edge pixel that is [share] logo and the rest [plate]. */
+    private fun unmix(c: Int, plate: Int, share: Float): Int {
+        fun ch(shift: Int): Int {
+            val p = (plate shr shift) and 0xFF
+            return (p + (((c shr shift) and 0xFF) - p) / share).roundToInt().coerceIn(0, 255)
+        }
+        return (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
 
     private fun legacy(icon: Drawable, recipe: TileRecipe?): TileArt {
@@ -565,7 +626,8 @@ object TileArtFactory {
         for (i in px.indices) {
             val c = px[i]
             val low = minOf((c shr 16) and 0xFF, (c shr 8) and 0xFF, c and 0xFF)
-            val keep = ((low - 150) / 70f).coerceIn(0f, 1f)
+            // From about 45% to 90% white on a dark picture; a narrower ramp stepped the curves (#640).
+            val keep = ((low - 115) / 115f).coerceIn(0f, 1f)
             px[i] = (((c ushr 24) * keep).roundToInt() shl 24) or 0xFFFFFF
         }
         layer.setPixels(px, 0, W, 0, 0, W, H)
@@ -752,9 +814,12 @@ object TileArtFactory {
         return out
     }
 
-    private fun Canvas.drawCover(d: Drawable, w: Int, h: Int) {
-        val iw = d.intrinsicWidth.takeIf { it > 0 } ?: w
-        val ih = d.intrinsicHeight.takeIf { it > 0 } ?: h
+    /** [iw]×[ih] is the size [d] is scaled from: its pixels for a bitmap, whatever density it was loaded at. */
+    private fun Canvas.drawCover(
+        d: Drawable, w: Int, h: Int,
+        iw: Int = d.intrinsicWidth.takeIf { it > 0 } ?: w,
+        ih: Int = d.intrinsicHeight.takeIf { it > 0 } ?: h,
+    ) {
         val scale = max(w / iw.toFloat(), h / ih.toFloat())
         val dw = (iw * scale).roundToInt()
         val dh = (ih * scale).roundToInt()

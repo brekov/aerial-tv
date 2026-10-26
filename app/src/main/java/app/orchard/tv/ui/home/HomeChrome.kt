@@ -1,12 +1,15 @@
 package app.orchard.tv.ui.home
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.text.format.DateFormat
 import android.graphics.PorterDuff
 import android.graphics.Matrix
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -14,7 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,11 +31,23 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.FilterQuality
@@ -41,11 +56,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.orchard.tv.R
+import app.orchard.tv.settings.AerialSettings
+import app.orchard.tv.wallpaper.Images
 import app.orchard.tv.system.NetKind
 import app.orchard.tv.system.NetworkStatus
+import app.orchard.tv.ui.components.Dissolve
 import app.orchard.tv.ui.components.Pressable
 import app.orchard.tv.ui.components.frozen
 import app.orchard.tv.ui.components.glassEdge
@@ -58,19 +81,59 @@ import app.orchard.tv.ui.theme.Type
 import app.orchard.tv.weather.Weather
 import app.orchard.tv.weather.WeatherKind
 import app.orchard.tv.weather.WeatherNow
-import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** The current time, ticking on the minute. */
+/** Tick on the minute and refresh immediately after waking or a system clock correction. */
 @Composable
-fun rememberNow(): State<LocalDateTime> = produceState(LocalDateTime.now()) {
-    while (true) {
-        value = LocalDateTime.now()
-        delay(60_000L - System.currentTimeMillis() % 60_000L + 30L)
+fun rememberNow(): State<LocalDateTime> {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val now = remember { mutableStateOf(LocalDateTime.now()) }
+    DisposableEffect(context, lifecycle) {
+        fun refresh() { now.value = LocalDateTime.now() }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = refresh()
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        var registered = false
+        fun stop() {
+            if (registered) {
+                context.unregisterReceiver(receiver)
+                registered = false
+            }
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+                    registered = true
+                    refresh()
+                }
+                Lifecycle.Event.ON_RESUME -> refresh()
+                Lifecycle.Event.ON_STOP -> stop()
+                else -> Unit
+            }
+        }
+        // A minute-long coroutine delay survives standby with its old value on Hisense VIDAA.
+        // Adding the observer also dispatches ON_START/ON_RESUME if already in the foreground.
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            stop()
+        }
     }
+    return now
 }
 
 @Composable
@@ -92,7 +155,10 @@ fun dateText(now: LocalDateTime): String {
             .replace(Regex("(?<=[^\\s,，'])EEEE"), " EEEE")
             .replace(Regex("EEEE(?=[^\\s,，'])"), "EEEE ")
     }
-    return now.format(DateTimeFormatter.ofPattern(pattern, locale))
+    // Android's SimpleDateFormat (ICU), not java.time: through desugaring, java.time gave the month
+    // its stand-alone form, "23 октябрь" in Russian where a date needs "23 октября".
+    val millis = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    return SimpleDateFormat(pattern, locale).format(Date(millis))
 }
 
 /**
@@ -117,10 +183,51 @@ fun HomeBackground(
     collapse: Float,
     /** How far the aerial wallpaper's film shows through (LiveWallpaper): picture and plate give way to it. */
     cover: () -> Float = { 0f },
+    /** Shade the film while it moves, as its picture would be shaded. */
+    shadeMoving: Boolean = false,
+    /**
+     * How far the film is stopped (0 to 1) with its glass ready ([frosted]) but its frame not yet
+     * the picture, which takes a moment more where the frame is decoded again (Xiaomi
+     * MiTV-MFTR0). Meanwhile the plate stands over the paused film, so the top row is back on
+     * its glass with the rest of Home, the same plate it keeps once the picture is in.
+     */
+    filmStopped: () -> Float = { 0f },
+    /** How far Home has given way to the screensaver carrying its wallpaper on: the plate goes. */
+    toSaver: () -> Float = { 0f },
+    /** The wallpaper's picture unshaded, shown [saverReveal] of the way and [saverPush] into its draw-in. */
+    saverImage: ImageBitmap? = null,
+    saverReveal: () -> Float = { 0f },
+    saverPush: () -> Float = { 0f },
 ) {
-    Crossfade(
+    Box(Modifier.fillMaxSize()) {
+        // Over a paused film, under the pictures: the shading its picture will have. The picture
+        // fades in over it as the film gives way, so the screen keeps the same light throughout.
+        Canvas(Modifier.fillMaxSize()) {
+            val stopped = maxOf(filmStopped(), if (shadeMoving) cover() else 0f)
+            // Deep in the grid its frosted background covers everything.
+            if (stopped < 0.01f || cover() < 0.01f || scroll() > collapse * 0.7f) return@Canvas
+            drawRect(Brush.verticalGradient(*Images.SHADE_AT.indices.map { Images.SHADE_AT[it] to Color.Black.copy(alpha = Images.SHADE[it]) }.toTypedArray()), alpha = stopped)
+            drawRect(Brush.horizontalGradient(0f to Color.Black.copy(alpha = Images.SHADE_LEFT), 1f to Color.Transparent, endX = size.width / 2), alpha = stopped)
+        }
+        Pictures(backdrop, frosted, scroll, collapse, cover)
+        if (saverImage != null) Canvas(Modifier.fillMaxSize()) {
+            val a = saverReveal()
+            if (a > 0.01f) drawDrawingIn(saverImage, saverPush(), a)
+        }
+        Plate(frosted ?: backdrop, plate, scroll, collapse, cover, filmStopped, toSaver)
+    }
+}
+
+/**
+ * The sharp picture and the grid's frosted one. A new wallpaper fades in over the old, which stays
+ * whole beneath it: crossfaded, the screen dimmed half-way through.
+ */
+@Composable
+private fun Pictures(backdrop: ImageBitmap?, frosted: ImageBitmap?, scroll: () -> Float, collapse: Float, cover: () -> Float) {
+    Dissolve(
         targetState = backdrop to frosted,
-        animationSpec = tween(450, easing = Motion.EaseOut),
+        durationMs = 450,
+        easing = Motion.EaseOut,
         modifier = Modifier.fillMaxSize(),
         label = "ambient",
     ) { (bmp, frost) ->
@@ -128,15 +235,11 @@ fun HomeBackground(
         // already, so it makes the glass itself.
         val glassSrc = frost ?: bmp
         val dark = remember(glassSrc) { glassSrc?.let { darkened(it, GRID_SHADE) } }
-        val plateSrc = remember(glassSrc) { glassSrc?.let { plateTinted(it) } }
-        // The plate, baked for one screen size and resting place; outside state, since it is made
-        // while drawing.
-        val plateFor = remember(plateSrc) { arrayOfNulls<Pair<Pair<Size, Rect>, ImageBitmap>>(1) }
         Canvas(Modifier.fillMaxSize()) {
             val film = cover()
             // On the top row, the film alone through the window: nothing of Compose's full-screen.
             if (film > 0.99f && scroll() < collapse * 0.3f) return@Canvas
-            if (bmp == null || glassSrc == null || dark == null || plateSrc == null) {
+            if (bmp == null || dark == null) {
                 drawRect(Color.Black)
                 return@Canvas
             }
@@ -147,31 +250,81 @@ fun HomeBackground(
             val g = ((p - 0.3f) / 0.4f).coerceIn(0f, 1f)
             if (g < 0.99f && film < 0.99f) drawImage(bmp, dstSize = full, filterQuality = FilterQuality.Low, alpha = 1f - film)
             if (g > 0.01f) drawImage(dark, dstSize = full, filterQuality = FilterQuality.Low, alpha = g)
-
-            // The plate rides with its row and dissolves into the frosted background: it fades
-            // over the first half of the scroll, swelling a little as if lifting off, and settles
-            // back the same way when focus returns to the top row. Kept small on purpose: the
-            // whole screen shrinking back into the plate read as too much.
-            val fade = (1f - smooth((p / 0.55f).coerceIn(0f, 1f))) * (1f - film)
-            if (plate == null || fade < 0.01f) return@Canvas
-            val radius = PlateCorner.toPx()
-            val grow = PlateSwell.toPx() * (1f - fade)
-            val r = plate.translate(0f, -scroll()).inflate(grow)
-            // Glass, continuous outline and lit edge baked into one picture at the plate's resting
-            // place and size, stretched as it swells and riding up with its row as it fades. The GPU
-            // draws one image. Composing them in shaders while drawing (1.27) came out solid white
-            // on older GPUs (Xiaomi MiTV-ASTP0, Android 9, Mali-G31, issue #183; a HuiQu projector,
-            // #181) and drawn apart they cost 3 ms more a frame than the plain rounded plate.
-            val baked = plateFor[0]?.takeIf { it.first == size to plate }?.second
-                ?: bakePlate(plateSrc, size, plate, radius, 1.2.dp.toPx()).also { plateFor[0] = (size to plate) to it }
-            drawImage(
-                baked,
-                dstOffset = IntOffset(r.left.roundToInt(), r.top.roundToInt()),
-                dstSize = IntSize(r.width.roundToInt(), r.height.roundToInt()),
-                alpha = fade,
-                filterQuality = FilterQuality.Low,
-            )
         }
+    }
+}
+
+/**
+ * The plate under the top row, one layer over whatever is behind it: the picture, or the film
+ * once stopped. It gives way only to a moving film, so the swap from the paused film to its
+ * picture leaves it as it is. A new glass fades in over the old one, which stays whole beneath
+ * it: two plates fading against each other let what is behind show through halfway.
+ */
+@Composable
+private fun Plate(glass: ImageBitmap?, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float) {
+    var shown by remember { mutableStateOf(glass) }
+    var under by remember { mutableStateOf<ImageBitmap?>(null) }
+    val swap = remember { Animatable(1f) }
+    fun visibility(): Float {
+        val rest = 1f - smooth(((scroll() / collapse).coerceIn(0f, 1f) / 0.55f).coerceIn(0f, 1f))
+        return rest * (1f - cover() * (1f - filmStopped())) * (1f - toSaver())
+    }
+    LaunchedEffect(glass) {
+        if (glass === shown) return@LaunchedEffect
+        // Not on screen (a moving film, or the grid): the new glass simply takes over. Faded in
+        // over the old one, a plate appearing for a stopped film would flash the last film's colours.
+        if (visibility() < 0.05f) {
+            shown = glass
+            under = null
+            swap.snapTo(1f)
+            return@LaunchedEffect
+        }
+        under = shown.takeIf { swap.value > 0.5f } ?: under
+        shown = glass
+        swap.snapTo(0f)
+        swap.animateTo(1f, tween(450, easing = Motion.EaseOut))
+        under = null
+    }
+    val top = remember(shown) { shown?.let { PlateLayer(plateTinted(it)) } }
+    val bottom = remember(under) { under?.let { PlateLayer(plateTinted(it)) } }
+    Canvas(Modifier.fillMaxSize()) {
+        if (plate == null) return@Canvas
+        // The plate rides with its row and dissolves into the frosted background: it fades
+        // over the first half of the scroll, swelling a little as if lifting off, and settles
+        // back the same way when focus returns to the top row. Kept small on purpose: the
+        // whole screen shrinking back into the plate read as too much.
+        val p = (scroll() / collapse).coerceIn(0f, 1f)
+        val rest = 1f - smooth((p / 0.55f).coerceIn(0f, 1f))
+        val alpha = visibility()
+        if (alpha < 0.01f) return@Canvas
+        val grow = PlateSwell.toPx() * (1f - rest)
+        val r = plate.translate(0f, -scroll()).inflate(grow)
+        val t = swap.value
+        if (t < 1f) bottom?.draw(this, plate, r, alpha)
+        top?.draw(this, plate, r, if (bottom != null) alpha * t else alpha)
+    }
+}
+
+/**
+ * Glass, continuous outline and lit edge baked into one picture at the plate's resting place and
+ * size, stretched as it swells and riding up with its row as it fades. The GPU draws one image.
+ * Composing them in shaders while drawing (1.27) came out solid white on older GPUs (Xiaomi
+ * MiTV-ASTP0, Android 9, Mali-G31, issue #183; a HuiQu projector, #181) and drawn apart they cost
+ * 3 ms more a frame than the plain rounded plate. Baked while drawing, for one screen and place.
+ */
+private class PlateLayer(private val src: ImageBitmap) {
+    private var baked: Pair<Pair<Size, Rect>, ImageBitmap>? = null
+
+    fun draw(scope: androidx.compose.ui.graphics.drawscope.DrawScope, plate: Rect, at: Rect, alpha: Float) = with(scope) {
+        val image = baked?.takeIf { it.first == size to plate }?.second
+            ?: bakePlate(src, size, plate, PlateCorner.toPx(), 1.2.dp.toPx()).also { baked = (size to plate) to it }
+        drawImage(
+            image,
+            dstOffset = IntOffset(at.left.roundToInt(), at.top.roundToInt()),
+            dstSize = IntSize(at.width.roundToInt(), at.height.roundToInt()),
+            alpha = alpha,
+            filterQuality = FilterQuality.Low,
+        )
     }
 }
 
@@ -220,6 +373,27 @@ private fun bakePlate(glass: ImageBitmap, screen: Size, plate: Rect, radius: Flo
     return out.frozen().asImageBitmap()
 }
 
+/**
+ * What Home shows behind panels. Folders and Hidden Apps open on Home frosted, as on tvOS: the
+ * grid's frosted background fading over it [frost] of the way, one full-screen draw of a small
+ * picture (in "Follow App" mode, which has none, a dark veil). Control Center keeps Home sharp
+ * under a dark [veil], its own panel the glass (1.41 frosted all of Home behind it too, which
+ * owners took for everything gone blurry).
+ */
+@Composable
+fun PanelBackdrop(frosted: ImageBitmap?, frost: () -> Float, veil: () -> Float) {
+    val dark = remember(frosted) { frosted?.let { darkened(it, GRID_SHADE) } }
+    Canvas(Modifier.fillMaxSize()) {
+        val f = frost()
+        if (f >= 0.01f) {
+            if (dark == null) drawRect(Color.Black, alpha = 0.55f * f)
+            else drawImage(dark, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()), filterQuality = FilterQuality.Low, alpha = f)
+        }
+        val v = veil()
+        if (v >= 0.01f) drawRect(Color.Black, alpha = 0.45f * v)
+    }
+}
+
 /** A small picture darkened ahead of time, so the grid's background costs no tint per frame. */
 private fun darkened(src: ImageBitmap, alpha: Float): ImageBitmap {
     val out = src.asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888, true)
@@ -228,24 +402,39 @@ private fun darkened(src: ImageBitmap, alpha: Float): ImageBitmap {
 }
 
 /**
- * The large clock, as on the lock screen: the date over the time, and under it the weather, the
- * city it is for (issue #59) and today's high and low. Left or right, the three lines share one
- * edge, the tiles' edge. The digits stay proportional: tabular ones leave a narrow "1" short of
+ * The large clock, as on the lock screen: the date (in Chinese, with the lunar one) over the time,
+ * and under it the weather, the city it is for (issue #59) and today's high and low. Left or right,
+ * the three lines share one edge, the tiles' edge. The digits stay proportional: tabular ones leave a narrow "1" short of
  * that edge. A soft shadow keeps them readable on bright photos. The clock screensaver shows the same.
  */
 @Composable
-fun ShelfClock(now: LocalDateTime, modifier: Modifier = Modifier, alignEnd: Boolean = false) {
+fun ShelfClock(
+    now: LocalDateTime,
+    modifier: Modifier = Modifier,
+    alignEnd: Boolean = false,
+    /** How far the time has moved to the screensaver's place ([toSaverClock]); the date and weather go. */
+    toSaver: () -> Float = { 0f },
+    /** The screensaver is up over Home, carrying this clock: it wanders as the screensaver's does. */
+    saving: Boolean = false,
+) {
+    val drift = if (saving) saverDrift(now) else DpOffset.Zero
     val shadow = Shadow(Color.Black.copy(alpha = 0.28f), Offset(0f, 2f), blurRadius = 18f)
     val secondary = Color.White.copy(alpha = 0.78f)
+    val aside = Modifier.graphicsLayer { alpha = 1f - (toSaver() * 2.5f).coerceIn(0f, 1f) }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
-        BasicText(dateText(now), style = Type.Title.copy(color = Color.White.copy(alpha = 0.9f), shadow = shadow))
+        // On a TV set to Chinese, the Chinese calendar's date follows, as on the iPhone's lock screen.
+        val lunar = if (Locale.getDefault().language == "zh") Lunar.text(now.toLocalDate()) else null
+        val date = dateText(now).let { if (lunar != null) "$it  $lunar" else it }
+        BasicText(date, style = Type.Title.copy(color = Color.White.copy(alpha = 0.9f), shadow = shadow), modifier = aside)
         BasicText(
             timeText(now),
             style = Type.Clock.copy(shadow = shadow),
-            modifier = Modifier.trimmed(top = ClockTrimTop, bottom = ClockTrimBottom),
+            // The digits' cap top, in the trimmed box: the 104sp line puts it 7.6dp down, less the trim.
+            modifier = Modifier.toSaverClock(toSaver, Type.Clock.fontSize, 7.6.dp - ClockTrimTop, drift)
+                .trimmed(top = ClockTrimTop, bottom = ClockTrimBottom),
         )
-        Weather.now?.let { w ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Weather.now?.takeIf { AerialSettings.showWeather }?.let { w ->
+            Row(aside, verticalAlignment = Alignment.CenterVertically) {
                 GlyphIcon(glyphFor(w), Color.White, 22.dp, Modifier.padding(end = 8.dp))
                 BasicText("${w.celsius}°", style = Type.Title.copy(color = Color.White, shadow = shadow))
                 val place = Weather.place?.takeIf { it.length <= 12 }
@@ -255,6 +444,37 @@ fun ShelfClock(now: LocalDateTime, modifier: Modifier = Modifier, alignEnd: Bool
             }
         }
     }
+}
+
+/** Inter's cap top below the top of a line of natural height, as a share of the font size. */
+private const val CAP_TOP = 0.242f
+
+/**
+ * Carries Home's time to where the screensaver shows it, top right and at its size, as [progress]
+ * goes from 0 to 1: when the screensaver carries on the aerial wallpaper's film, Home's clock
+ * becomes the screensaver's rather than one fading out and another in. [fontSize] is the time's
+ * size on Home and [capTop] where its digits' cap top lies in this element's box.
+ */
+private fun Modifier.toSaverClock(progress: () -> Float, fontSize: TextUnit, capTop: Dp, drift: DpOffset = DpOffset.Zero): Modifier = composed {
+    // Where Home lays the time out, read before this element's own transform.
+    var placed by remember { mutableStateOf<Pair<Rect, Float>?>(null) }
+    onGloballyPositioned { placed = it.boundsInRoot() to it.findRootCoordinates().size.width.toFloat() }
+        .graphicsLayer {
+            val p = progress()
+            val (box, rootW) = placed ?: return@graphicsLayer
+            if (p <= 0f) return@graphicsLayer
+            val s = SaverClockStyle.fontSize.toPx() / fontSize.toPx()
+            val k = 1f + (s - 1f) * p
+            transformOrigin = TransformOrigin(0f, 0f)
+            scaleX = k
+            scaleY = k
+            val targetCapTop = SaverClockTop.toPx() + SaverClockStyle.fontSize.toPx() * CAP_TOP
+            val targetLeft = if (AerialSettings.clockRight) rootW - SaverClockSide.toPx() - box.width * s else SaverClockSide.toPx()
+            translationX = p * (targetLeft - box.left + drift.x.toPx())
+            translationY = p * (targetCapTop - s * capTop.toPx() - box.top + drift.y.toPx())
+            // The screensaver shows no time: Home's goes as the screensaver comes.
+            if (!AerialSettings.screensaverClock) alpha = 1f - p
+        }
 }
 
 /**
@@ -286,15 +506,20 @@ private fun conditionName(kind: WeatherKind): Int = when (kind) {
  * pill, so the wallpaper keeps the rest of the screen. A soft shadow keeps it readable on photos.
  */
 @Composable
-fun CornerClock(now: LocalDateTime, modifier: Modifier = Modifier) {
+fun CornerClock(now: LocalDateTime, modifier: Modifier = Modifier, toSaver: () -> Float = { 0f }, saving: Boolean = false) {
+    val drift = if (saving) saverDrift(now) else DpOffset.Zero
     val dim = Color.White.copy(alpha = 0.92f)
     val shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 8f)
     Row(modifier.height(34.dp), verticalAlignment = Alignment.CenterVertically) {
-        BasicText(timeText(now), style = Type.Title.copy(color = dim, shadow = shadow))
-        Weather.now?.let { w ->
-            GlyphIcon(glyphFor(w), dim, 18.dp, Modifier.padding(start = 16.dp, end = 6.dp))
+        BasicText(
+            timeText(now), style = Type.SmallClock.copy(fontSize = Type.Title.fontSize, color = dim, shadow = shadow),
+            modifier = Modifier.toSaverClock(toSaver, Type.Title.fontSize, Type.Title.fontSize.value.dp * CAP_TOP, drift),
+        )
+        Weather.now?.takeIf { AerialSettings.showWeather }?.let { w ->
+            val aside = Modifier.graphicsLayer { alpha = 1f - (toSaver() * 2.5f).coerceIn(0f, 1f) }
+            GlyphIcon(glyphFor(w), dim, 18.dp, aside.padding(start = 16.dp, end = 6.dp))
             val place = Weather.place?.takeIf { it.length <= 12 }
-            BasicText(listOfNotNull(place, "${w.celsius}°").joinToString(" "), style = Type.Headline.copy(color = dim, shadow = shadow))
+            BasicText(listOfNotNull(place, "${w.celsius}°").joinToString(" "), style = Type.Headline.copy(color = dim, shadow = shadow), modifier = aside)
         }
     }
 }

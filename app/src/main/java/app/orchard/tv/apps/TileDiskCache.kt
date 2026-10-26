@@ -39,8 +39,11 @@ object TileDiskCache {
         dir = File(context.cacheDir, "tiles").apply { mkdirs() }
     }
 
+    /** Bumped when tiles are drawn differently, so a build with the same version code redraws them. */
+    private const val ART = 3
+
     fun key(stamp: Long): String =
-        "$stamp|${TileArtFactory.W}|${TileArtFactory.unified}|${Locale.getDefault().toLanguageTag()}|${BuildConfig.VERSION_CODE}"
+        "$stamp|${TileArtFactory.W}|${TileArtFactory.unified}|${Locale.getDefault().toLanguageTag()}|${BuildConfig.VERSION_CODE}|$ART"
 
     private fun file(pkg: String) = File(dir, "$pkg.tile")
 
@@ -66,6 +69,18 @@ object TileDiskCache {
                 label to TileArt(back.asImageBitmap(), fore?.asImageBitmap(), foreAt, tint, backdrop.asImageBitmap())
             }
         }.onFailure { Log.w(TAG, "could not read the kept tile of $pkg", it) }.getOrNull()
+    }
+
+    /** Only the label and color kept for [pkg] under [key], or null: the few bytes at the file's start. */
+    fun readHeader(pkg: String, key: String): Pair<String, Color>? {
+        if (!::dir.isInitialized) return null
+        val f = file(pkg).takeIf { it.exists() } ?: return null
+        return runCatching {
+            DataInputStream(f.inputStream().buffered(512)).use { input ->
+                if (input.readUTF() != key) return null
+                input.readUTF() to Color(input.readInt())
+            }
+        }.getOrNull()
     }
 
     /** Keeps [art] for the next start, in the background. */

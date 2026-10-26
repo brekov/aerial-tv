@@ -76,8 +76,8 @@ fun FolderView(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(200)) + scaleIn(tween(300, easing = Motion.Drawer), initialScale = 0.94f),
-        exit = fadeOut(tween(150)) + scaleOut(tween(150, easing = Motion.EaseOut), targetScale = 0.97f),
+        enter = fadeIn(tween(200, easing = Motion.EaseOut)) + scaleIn(tween(300, easing = Motion.Drawer), initialScale = 0.94f),
+        exit = fadeOut(tween(150, easing = Motion.EaseOut)) + scaleOut(tween(150, easing = Motion.EaseOut), targetScale = 0.97f),
         modifier = Modifier.fillMaxSize(),
     ) {
         Box(Modifier.fillMaxSize().dismissOnTap(onDismiss).background(Color.Black.copy(alpha = 0.45f))) {
@@ -94,7 +94,7 @@ fun FolderView(
                 )
                 shownApps.chunked(columns).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(28.dp), modifier = Modifier.padding(bottom = 50.dp)) {
-                        row.forEachIndexed { i, app ->
+                        row.forEach { app ->
                             AppTile(
                                 app = app,
                                 width = tileW,
@@ -102,7 +102,9 @@ fun FolderView(
                                 focusRequester = requester(app.key),
                                 enabled = enabled,
                                 moving = false,
-                                appearDelayMs = (i * 28).coerceAtMost(200),
+                                // The folder grows in by itself: its tiles replaying the grid's first
+                                // entrance on top of that made every open drag on.
+                                appearDelayMs = null,
                                 onFocused = { focusedKey = app.key },
                                 onClick = { bounds -> onLaunch(app, bounds) },
                                 onLongPress = { bounds -> menuKey = app.key; onLongPress(app, bounds) },

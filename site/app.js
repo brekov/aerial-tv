@@ -70,6 +70,7 @@ adb shell am start -n app.orchard.tv/.MainActivity`;
       box.setAttribute('aria-valuenow', Math.round(x * 100));
       // At either end the line and its knob would hang half off the screen; let them go.
       divider.style.opacity = x > 0.03 && x < 0.97 ? 1 : 0;
+      box.classList.toggle('done', x >= 0.999);
     };
     const tick = () => {
       const d = target - x;

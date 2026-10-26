@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint as ComposePaint
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.asImageBitmap
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
+import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.ui.theme.Palette
 import app.orchard.tv.wallpaper.Wallpapers
 import kotlin.math.roundToInt
@@ -75,6 +77,12 @@ fun Modifier.liquidGlass(corner: Dp, bottomCorners: Boolean = true): Modifier = 
             onDrawBehind {
                 if (shader == null || brush == null || root == IntSize.Zero) {
                     drawImage(flat, dstSize = IntSize(w, h), colorFilter = ColorFilter.tint(Palette.Glass))
+                } else if (AerialSettings.lite) {
+                    // Lite (AerialSettings.lite): one solid color, the frosted wallpaper's average as
+                    // the glass would dim it, without the layer the glass needs every frame, which
+                    // weak GPUs feel most while a panel slides in. Solid: the plain glass color is
+                    // see-through and showed the tiles under the Personalize sheet.
+                    drawImage(flat, dstSize = IntSize(w, h), colorFilter = ColorFilter.tint(liteGlass(frost)))
                 } else {
                     shader.setLocalMatrix(Matrix().apply {
                         setScale(root.width.toFloat() / frost.width, root.height.toFloat() / frost.height)
@@ -137,6 +145,22 @@ fun glassEdge(w: Int, h: Int, radius: Float, rim: Float, bottomCorners: Boolean 
     }
 
 /** Panels: the frosted picture at half its light, lifted a little, so white text reads on snow. */
+/** Lite's panel color for [frost]: its average color, dimmed as [PanelTint] dims the glass. Made once per picture. */
+private fun liteGlass(frost: ImageBitmap): Color = synchronized(liteColors) {
+    liteColors.getOrPut(frost) {
+        val small = android.graphics.Bitmap.createScaledBitmap(frost.asAndroidBitmap(), 16, 9, true)
+        var r = 0f; var g = 0f; var b = 0f
+        for (y in 0 until 9) for (x in 0 until 16) {
+            val c = small.getPixel(x, y)
+            r += android.graphics.Color.red(c); g += android.graphics.Color.green(c); b += android.graphics.Color.blue(c)
+        }
+        fun dim(sum: Float) = ((sum / 144f) * 0.48f + 14f).coerceIn(0f, 255f) / 255f
+        Color(dim(r), dim(g), dim(b))
+    }
+}
+
+private val liteColors = java.util.WeakHashMap<ImageBitmap, Color>()
+
 private val PanelTint = ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
     0.48f, 0f, 0f, 0f, 14f,
     0f, 0.48f, 0f, 0f, 14f,

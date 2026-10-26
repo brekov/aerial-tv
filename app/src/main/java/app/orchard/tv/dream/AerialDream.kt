@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import app.orchard.tv.MainActivity
+import app.orchard.tv.system.DiagLog
 import app.orchard.tv.system.MissingClipboard
 import app.orchard.tv.ui.theme.canvasDensity
 import app.orchard.tv.weather.Weather
@@ -18,6 +20,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import app.orchard.tv.ui.home.LiveFilm
 import app.orchard.tv.ui.home.Screensaver
 import app.orchard.tv.ui.home.ScreensaverSkips
 import app.orchard.tv.ui.home.rememberNow
@@ -53,6 +56,8 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
         // in dispatchKeyEvent, as a non-interactive dream would.
         isInteractive = true
         isFullscreen = true
+        // Home's wallpaper film holds the decoder the dream's film needs (TCL MT5879).
+        LiveFilm.onHome?.letDecoderGo()
         Wallpapers.init(this)
         Weather.init(this)
         val canvas = canvasDensity(resources.displayMetrics)
@@ -73,7 +78,15 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (skips.onKey(event)) return true
-        if (event.action == KeyEvent.ACTION_DOWN) finish()
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            MainActivity.dreamWokeAt = event.eventTime
+            MainActivity.dreamWokeKey = event.keyCode
+            DiagLog.i("dream woken by ${KeyEvent.keyCodeToString(event.keyCode)} at ${event.eventTime}")
+            finish()
+        }
+        // The lift, if it comes here while the dream is still up. Not the cancelled one Android sends
+        // as the dream loses focus: the real lift then still goes to Home (TCL MT5879).
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled && event.keyCode == MainActivity.dreamWokeKey) MainActivity.dreamWokeKey = -1
         return true
     }
 

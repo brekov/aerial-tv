@@ -68,6 +68,7 @@ TCL 手机 App 有一个「把手机里的 APK 推到电视」的功能。电视
 ## HOME 与守护
 
 - 和小米一样，靠桌面守护接管。待机唤醒后会自动回到 Aerial（实测）。
+- 同样是 cyberui、多屏互动装 guard 版的 TCL tc8000_ay30a2（Amlogic，Android 11）：守护运行时，遥控器关机后再也唤不醒，只能拔电；关掉守护就正常（#371，报告人做了对照实验）。怀疑是守护的按键过滤让唤醒的电源键经过了 Aerial 的进程。1.41 起屏幕关闭时不过滤按键，亮屏后再开，等报告人复测。1.43 复测仍唤不醒，关掉应用冻结也一样（#371），同型号刷回 V472 固件正常、V745 才有（#132）。1.44 加了可选的「待机时守护退出」：`adb shell am broadcast -a app.orchard.tv.CONFIG -n app.orchard.tv/.guard.ConfigReceiver --ez guard_off_in_standby true`。息屏时守护用 `disableSelf()` 把自己移出无障碍列表（Android 7 以下改写设置），亮屏时由挂在进程上的接收器加回，加回后照常检查前台、拉回原桌面；进程在待机中被杀时，下一次启动（通知监听重绑、同步）发现还在息屏就只挂接收器，不提前加回。我们的 MT5879 上实测：按待机后 0.5 秒内守护已移出、walleve 两个服务保留；遥控器唤醒后守护加回、walleve 仍在、前台是 Aerial（2026-10-24，测完把选项关回去了）。
 - **升级 App 后，守护服务处于「已启用但没绑定」状态**。`GuardSetup.rebindIfStalled` 会先移除、1.5 秒后再加回，触发重新绑定（两次写入挨得太近会被系统合并，不起作用）。
 - TCL 自己有两个无障碍服务（`com.tcl.walleve`，「小T助手」），改 `enabled_accessibility_services` 时一定要保留。
 - 待机时网络 ADB 会断，但 adbd 不会被关；唤醒后能直接重连。
@@ -80,8 +81,11 @@ TCL 手机 App 有一个「把手机里的 APK 推到电视」的功能。电视
 
 ## 音量与亮度
 
-- 音量：App 调用 `adjustStreamVolume` 只会改 Android 记录的数值（`system volume_music_speaker`），不会写入功放。真正写硬件的是 SystemUI 里的 `tsdkNative.setVolumeForDevice`，而它只在显示音量条时才执行。所以 Aerial 在 TCL 上调音量要带 `AudioManager.FLAG_SHOW_UI`（会同时弹出 TCL 的音量条）。
-- 亮度：标准的 `screen_brightness` 被忽略，背光走 TCL 私有的 `tvos.tv.picture.TPictureManager` / `com.tcl.tv.pq.TvBacklightManager`。控制中心的「亮度」改为打开 TCL 的侧边设置面板：`startService(Intent("com.tcl.settings.SHOW_WINDOW").setPackage("com.tcl.settings"))`，打开后默认就在「图像」页，第一项是亮度。
+- 音量：写功放的是 SystemUI 里的 `tsdkNative.setVolumeForDevice`。1.40 以前以为它只在显示音量条时才执行，所以控制中心的滑块带 `AudioManager.FLAG_SHOW_UI`，TCL 的音量条会同时弹出来（#288）。2026-10-23 在这台电视上复测：不带这个标志调音量，SystemUI 照样调用 `setVolumeForDevice`（`value = 27`，`ret=0`），也不弹音量条；TCL 75V2（m7221）的报告人测的也一样。1.41 起控制中心的滑块不带标志，只有守护代替按住的音量键连续调时还带（和按键本身一样弹 TCL 的音量条）。
+- 亮度：标准的 `screen_brightness` 被忽略（2026-10-25 读数 78，拖 TCL 的滑块时不变）。控制中心的「亮度」打开 TCL 的侧边设置面板：`startService(Intent("com.tcl.settings.SHOW_WINDOW").setPackage("com.tcl.settings"))`，打开后默认就在「图像」页，第一项是亮度。户主更喜欢这样：不弹 TCL 的亮度条。
+- 亮度：TCL 自己怎么调（2026-10-25 抓日志，户主用遥控器快捷键和 TCL 面板各拖了一轮）：两条路都由 `com.tcl.settings` 的 `PictureImpl` 调 `TTvPictureManager.setBacklight(int)`，即视频背光 `grp_video_backlight`（`sita.video: tos_picture_set_backlight e_mode=0`），刻度 0–100，当时在 16–27 之间。快捷键先经 system_server 的 `TclShortCutKeyManager.adjustBrightness`，再 `startService` 给 TCL 设置（`ITEM=picture_backlight`, `MOTION=DOWN/UP`, `MOTION_VALUE=1`），会弹 TCL 的亮度条。TCL 设置里另一套 `PictureForTROM5Impl`（`com.tcl.tv.pq.TvBacklightManager`，binder 服务 `tcl_tv_display`）在这台不用，服务列表里没有 `tcl_tv_display`。
+- 亮度：第三方程序调不了。`com.tcl.tvmanager.TTvPictureManager` 在 boot classpath 里（`/product/framework/com.tcl.tvmanager.jar`），任何进程都能调，但在 `com.tcl.settings` 以外的进程里（Aerial 的 1.48-guard、shell 的 `app_process`）：`getBacklight()` / `getGraphicBacklight()` / `getBrightness()` 都返回 0，`tsdkNative` 记 `ret=0`，`sitatvservice` 那边没有任何 `tos_picture_get_*` 记录；`setBacklight(23)` 返回成功（`tos_ret=0`），但同样没有 `tos_picture_set_backlight`，背光没动。也就是说，固件把非 TCL 进程的请求在本地挡掉了，而且不报错。所以 Aerial 不显示滑块（`TclPicture.backlight` 只在读数 1–100 时用）。75V2（m7221，Android 8）上同一个 SDK 第三方能读写，1.41 起那里有滑块，报告人已验证（#363）。
+- 亮度：唯一能让第三方改亮度的办法是像快捷键那样 `startService` 给 TCL 设置，但每次都弹 TCL 的亮度条，所以没做。
 
 ## 信号源
 
@@ -95,6 +99,13 @@ TCL 手机 App 有一个「把手机里的 APK 推到电视」的功能。电视
 - `install.sh` 会把 `secure screensaver_components` 换成 `app.orchard.tv/app.orchard.tv.dream.AerialDream`；`restore.sh` 会换回 `screensaver_default_component`。
 - 手动测试：`adb shell am start -n com.android.systemui/.Somnambulator`。
 - 1.14 及以前，按键结束屏保时 Aerial 会崩溃：Android 11 起屏保跑在 Activity 里，窗口先被移除（生命周期变成 DESTROYED），然后才调用 `onDreamingStopped`，往回设成 CREATED 会抛异常。崩溃后无障碍服务处于「已启用但没绑定」，守护失效，按 HOME 就进了 TCL 桌面。1.15 修复了崩溃，并在复活时也检查一次「已启用但没绑定」。
+- 遥控器按一下可能到达两次（户主反馈：从屏保按「下」唤醒后焦点跟着进了 App 列表，小米蓝牙遥控器没有），唤醒后 400ms 内的按键都当作唤醒（2026-10-23）。
+- 1.42：Aerial 的 Dream 是系统屏保时，主页按返回和主页计时到点都通过 `Somnambulator` 启动这个 Dream，不再另起主页里的屏保。以前两套并存：返回键起的是主页屏保（接着放壁纸那段 4K SDR），2 分钟后被系统 Dream（杜比视界）顶掉，`FLAG_KEEP_SCREEN_ON` 挡不住。实测返回键起 Dream，解码器是 `OMX.MS.DOLBY_VISION.DVHE.STN.Decoder`（2026-10-24）。
+- 1.42：只有一个 4K 解码器。主页航拍壁纸（4K HEVC）在播时起 Dream，Dream 的杜比视界 `DECODING_FAILED`，屏保降成 HEVC 且整个进程都降着（户主看到的「按返回只是默认格式」）。换窗口起 Dream 即使 4K 也会黑一下。现在壁纸和屏保都是航拍时不起 Dream，在主页里由壁纸的播放器接着放；`FLAG_KEEP_SCREEN_ON` 能挡住 TCL 的 2 分钟系统屏保（实测 2 分 40 秒没出来），主页计时提前到 1 分 45 秒。别的情况起 Dream 前、Dream attach 时都先让主页壁纸放开解码器（2026-10-24）。
+- 1.42：「从屏保按一下下键焦点连跳好几行」。关 Dream 时杜比视界解码器释放会卡住主线程，这一下的重复键 2.7 秒后才到主页，过了 400ms 的唤醒窗口。现在唤醒 Dream 的那个键整次按键（重复和松开）都由主页吞掉。注意 Dream 失焦时 Android 会给它补一个**被取消的** UP，不能把它当成松开。`input keyevent --longpress DPAD_DOWN` 复现、修复后焦点留在第一排（2026-10-24）。
+- 1.42：守护监听 `screensaver_components`，固件改回「艺术画报」时立即改回 Aerial 的。个性化选「系统内置」时把系统屏保还给 `screensaver_default_component`（艺术画报），返回键起的就是它；选回别的再改回 Aerial 的。都在 MT5879 上验证过（2026-10-24）。
+- 1.42：遥控器信号源键在有 TCL 信号源面板的固件上交给固件（PR #334），实测只弹 TCL 自己的面板。
+- 主屏幕的航拍壁纸（4K SDR，SurfaceView）PixelCopy 能读到，`screencap` 也截得到（2026-10-23）。
 - **截图截不到视频画面**（视频走独立的硬件图层，截出来是黑的），但字幕和时钟能截到。地名字幕出现，说明视频已经在渲染。
 
 ## 其他

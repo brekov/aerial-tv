@@ -64,16 +64,27 @@ h1 {
 .btn.ghost:hover { background: rgba(41,151,255,.1); }
 
 /* tv frame */
-.tv { position: relative; margin: 64px auto 0; max-width: 1040px; }
+.tv { position: relative; margin: 64px auto 0; max-width: 1040px; container-type: inline-size; }
 .tv .screen {
   position: relative; border-radius: 14px; overflow: hidden; background: #000;
   box-shadow: 0 0 0 10px #111, 0 0 0 11px #2a2a2d, 0 40px 120px -20px rgba(41,151,255,.25), 0 30px 80px rgba(0,0,0,.8);
 }
-.tv .screen img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+/* The screen is 16:9, rounded down to whole pixels. At a fractional height (201.38px on a phone)
+   iPhone Safari drew the sliding Aerial shot a device pixel short while it moved, so the stock
+   launcher showed as a line along the bottom, and the shot jumped down when the wipe ended. */
+.tv .screen { aspect-ratio: 16 / 9; height: round(down, 100cqw * 9 / 16, 1px); }
+.tv .screen img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
 .compare { --x: 0%; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
 .compare img { -webkit-user-drag: none; pointer-events: none; }
-.compare .before { position: absolute; inset: 0; height: 100%; clip-path: inset(0 0 0 var(--x)); }
-.compare .divider { transition: opacity .25s ease; position: absolute; top: 0; bottom: 0; left: var(--x); width: 2px; margin-left: -1px; background: rgba(255,255,255,.9); box-shadow: 0 0 18px rgba(0,0,0,.5); }
+/* Aerial's shot lies on top, in a window that slides in from the left while the shot inside slides
+   back, so the shot stays put and grows from the left edge. The stock shot underneath is never cut:
+   iPhone Safari let the last pixel row of a cut image (clip-path, or a sliding window) show past the
+   cut, so whatever it leaks now lands under Aerial's shot, not over it. */
+.compare .after { position: absolute; inset: 0 0 -1px; z-index: 1; overflow: hidden; transform: translateX(calc(var(--x) - 100%)); }
+.compare .after img { transform: translateX(calc(100% - var(--x))); }
+/* Wiped all the way to Aerial: drop the stock shot altogether. */
+.compare.done .before { display: none; }
+.compare .divider { transition: opacity .25s ease; position: absolute; z-index: 2; top: 0; bottom: 0; left: var(--x); width: 2px; margin-left: -1px; background: rgba(255,255,255,.9); box-shadow: 0 0 18px rgba(0,0,0,.5); }
 .compare .knob {
   position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
   display: grid; place-items: center; color: #111; background: rgba(255,255,255,.92);
@@ -130,6 +141,7 @@ h2 { font-size: clamp(34px, 5vw, 56px); line-height: 1.08; letter-spacing: -.03e
 .tile p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
 
 .devices { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 40px; }
+.devices-note { text-align: center; margin-top: 18px; }
 .chip { border: 1px solid var(--line); background: var(--card); border-radius: 980px; padding: 8px 16px; font-size: 15px; color: var(--muted); }
 .chip b { color: var(--text); font-weight: 600; }
 a.chip-link { color: var(--muted); transition: border-color .2s ease, color .2s ease; }
@@ -160,6 +172,8 @@ a.chip-link:hover { text-decoration: none; border-color: rgba(41,151,255,.5); co
 .panel.on { display: block; }
 .panel > p { color: var(--muted); margin: 0 0 14px; }
 .panel > p.note { color: var(--dim); margin: 14px 0 0; }
+.panel ol { color: var(--muted); margin: 0 0 14px; padding-left: 22px; }
+.panel ol li { margin: 4px 0; }
 .code { position: relative; background: #0d0d0f; border: 1px solid var(--line); border-radius: 16px; }
 .code pre {
   margin: 0; padding: 22px 22px 22px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
@@ -218,4 +232,90 @@ footer a { color: var(--muted); }
 }
 @media (max-width: 480px) {
   .tabs .logo.xiaomi, .tabs .logo.android { display: none; }
+  .tabs[data-tabs="method"] { display: flex; flex-wrap: wrap; }
+  .tabs[data-tabs="method"] button { flex: 1 1 auto; justify-content: center; padding: 8px 10px; }
+}
+
+/* voices: posts from Weibo, X and Xiaohongshu, one stack of cards per platform */
+nav .links a[aria-current] { color: var(--text); }
+.voices-hero { text-align: center; padding: 96px 0 8px; }
+.voices { padding-top: 56px; overflow-x: clip; }  /* a thrown card must not widen the page */
+.decks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 48px 40px; }
+.deck-col { width: 100%; max-width: 380px; margin: 0 auto; display: flex; flex-direction: column; }
+.deck-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.deck-count { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+.pf { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 980px; font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.pf.weibo { background: rgba(230,22,45,.16); color: #ff6b7a; }
+.pf.x { background: rgba(255,255,255,.1); color: var(--text); }
+.pf.xhs { background: rgba(255,36,66,.16); color: #ff7088; }
+
+/* All cards share one grid cell, so the deck is as tall as its longest card and every card
+   matches it. The cards behind peek out above the top one; room for two of them sits above. */
+.deck { flex: 1; display: grid; margin-top: 32px; outline: none; touch-action: pan-y; }
+.deck:focus-visible .vcard[data-p="0"] { box-shadow: 0 0 0 2px var(--accent), 0 24px 60px rgba(0,0,0,.55); }
+.vcard {
+  grid-area: 1 / 1; position: relative; display: flex; flex-direction: column; gap: 14px; padding: 20px 20px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 24px 60px rgba(0,0,0,.55); transform-origin: 50% 100%;
+  transition: transform .42s var(--ease), opacity .3s ease; user-select: none; -webkit-user-select: none; cursor: pointer;
+}
+/* Cards further back go darker, so the stack reads as depth rather than clutter. */
+.vcard::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: #000; opacity: 0; pointer-events: none; transition: opacity .42s var(--ease); }
+.vcard[data-p="0"] { transform: none; }
+.vcard[data-p="1"] { transform: translate(-8px, -16px) rotate(-3deg) scale(.95); }
+.vcard[data-p="1"]::after { opacity: .22; }
+.vcard[data-p="2"], .vcard[data-p="3"] { transform: translate(10px, -30px) rotate(3.2deg) scale(.9); }
+.vcard[data-p="2"]::after { opacity: .42; }
+.vcard[data-p="3"] { opacity: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .deck:hover .vcard[data-p="1"] { transform: translate(-16px, -19px) rotate(-4deg) scale(.95); }
+  .deck:hover .vcard[data-p="2"] { transform: translate(18px, -34px) rotate(4.5deg) scale(.9); }
+}
+/* Leaving: the top card is thrown to one side, then tucked in at the back. */
+.vcard.out-r { transform: translate(72%, 10px) rotate(9deg) !important; transition-duration: .22s; }
+.vcard.out-l { transform: translate(-72%, 10px) rotate(-9deg) !important; transition-duration: .22s; }
+.vcard.dragging { transition: none; }
+.vcard img { -webkit-user-drag: none; }
+
+.vcard header { display: flex; align-items: center; gap: 12px; }
+.vcard .avatar { width: 40px; height: 40px; border-radius: 50%; flex: none; background: var(--card-2); }
+.vcard .who { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.vcard .who b { font-size: 15px; font-weight: 600; }
+.vcard .who span { color: var(--dim); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vcard .q {
+  flex: none; margin: 0; color: #e8e8ed; font-size: 16px; line-height: 1.65;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 11; overflow: hidden;
+}
+.vcard.has-pic .q { -webkit-line-clamp: 5; }
+.vcard .q.big { font-size: 22px; line-height: 1.5; letter-spacing: -.01em; font-weight: 500; color: var(--text); -webkit-line-clamp: 9; }
+.vcard .pic { flex: none; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.vcard .pic img { width: 100%; height: 100%; object-fit: cover; }
+.vcard footer { display: flex; align-items: center; justify-content: space-between; font-size: 13px; line-height: 1.4; margin-top: auto; padding: 2px 0 0; border: 0; color: inherit; }
+.vcard .stat { color: var(--dim); }
+.vcard footer a { color: var(--muted); padding: 4px 0; }
+.vcard footer a:hover { color: var(--text); text-decoration: none; }
+
+.deck-nav { display: flex; justify-content: center; gap: 12px; margin-top: 22px; }
+.deck-nav button {
+  appearance: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: var(--muted); background: transparent; border: 1px solid var(--line);
+  transition: color .2s ease, border-color .2s ease, transform .15s var(--ease);
+}
+.deck-nav button:hover { color: var(--text); border-color: rgba(255,255,255,.22); }
+.deck-nav button:active { transform: scale(.94); }
+
+.voices-cta { text-align: center; }
+.voices-cta .lede { margin-top: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vcard { transition: opacity .2s ease; }
+  .vcard.out-r, .vcard.out-l { transform: none !important; opacity: 0; }
+}
+@media (max-width: 860px) {
+  .voices-hero { padding-top: 64px; }
+  .voices { padding-top: 40px; }
+  .decks { gap: 56px; }
+}
+@media (max-width: 400px) {
+  .vcard .q.big { font-size: 20px; }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.heightIn
 import android.view.KeyEvent as NativeKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -60,6 +62,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -76,6 +79,7 @@ import app.orchard.tv.R
 import app.orchard.tv.apps.SourceLooks
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.system.HomeStatus
+import app.orchard.tv.system.LaunchFallback
 import app.orchard.tv.system.NetKind
 import app.orchard.tv.system.SourceKind
 import app.orchard.tv.system.Sounds
@@ -108,6 +112,8 @@ fun ControlCenter(
     now: LocalDateTime,
     onOpen: (android.content.Intent) -> Unit,
     onClose: () -> Unit,
+    /** Draw the closed panel once, nearly transparent, so that its first opening is not its first draw (HomeScreen). */
+    warm: Boolean = false,
 ) {
     BackHandler(enabled = visible) {
         when (page) {
@@ -118,10 +124,12 @@ fun ControlCenter(
         }
     }
 
+    LaunchedEffect(visible) { if (visible) Updates.checkIfStale(maxAgeMs = Updates.CONTROL_CENTER_MAX_AGE_MS) }
+
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(220)),
-        exit = fadeOut(tween(180)),
+        enter = fadeIn(tween(220, easing = Motion.EaseOut)),
+        exit = fadeOut(tween(180, easing = Motion.EaseOut)),
         modifier = Modifier.fillMaxSize(),
     ) {
         // A tap outside the panel closes Control Center.
@@ -129,25 +137,37 @@ fun ControlCenter(
     }
 
     Box(Modifier.fillMaxSize().padding(top = 24.dp, end = 32.dp), contentAlignment = Alignment.TopEnd) {
+        // The first opening composed the panel and then, frame after frame, gave the GPU its
+        // pictures, glyphs and shaders for the first time: 55-95 ms a frame for the whole drop-in,
+        // against about 26 ms on the second opening (Xiaomi MiTV-MFTR0, release build). Drawn once
+        // at 1% while Home is idle, without focus, the first opening is like the second.
+        if (warm && !visible) {
+            Column(Modifier.graphicsLayer { alpha = 0.01f }.width(300.dp).liquidGlass(24.dp).padding(16.dp)) {
+                MainPage(vm, now, false, onOpen)
+            }
+        }
         AnimatedVisibility(
             visible = visible,
             // Grows out of the corner where the status pill lives; leaves faster than it came.
-            enter = fadeIn(tween(200)) + scaleIn(tween(340, easing = Motion.Drawer), initialScale = 0.9f, transformOrigin = TransformOrigin(1f, 0f)),
-            exit = fadeOut(tween(160)) + scaleOut(tween(160, easing = Motion.EaseOut), targetScale = 0.95f, transformOrigin = TransformOrigin(1f, 0f)),
+            enter = fadeIn(tween(200, easing = Motion.EaseOut)) + scaleIn(tween(280, easing = Motion.Drawer), initialScale = 0.9f, transformOrigin = TransformOrigin(1f, 0f)),
+            exit = fadeOut(tween(160, easing = Motion.EaseOut)) + scaleOut(tween(160, easing = Motion.EaseOut), targetScale = 0.95f, transformOrigin = TransformOrigin(1f, 0f)),
         ) {
             Column(
                 Modifier
-                    .width(360.dp)
+                    .width(300.dp)
                     .consumeTaps()
-                    .liquidGlass(30.dp)
-                    .padding(22.dp),
+                    .liquidGlass(24.dp)
+                    .padding(16.dp),
             ) {
                 AnimatedContent(
                     targetState = page,
                     transitionSpec = {
-                        val forward = targetState != CcPage.Main
-                        (fadeIn(tween(200, delayMillis = 40)) + slideInHorizontally(tween(260, easing = Motion.EaseOut)) { if (forward) it / 6 else -it / 6 })
-                            .togetherWith(fadeOut(tween(120)) + slideOutHorizontally(tween(200, easing = Motion.EaseOut)) { if (forward) -it / 8 else it / 8 })
+                        // Fade only, and snap the panel size. Animating the panel's height re-measures
+                        // both pages (and their scrollables) every frame, and sliding the new page on
+                        // top of the cross-fade makes its first frame land late; on low-end TV SoCs
+                        // that is felt as a stutter when opening and leaving pages.
+                        (fadeIn(tween(130, easing = Motion.EaseOut)) togetherWith fadeOut(tween(110, easing = Motion.EaseOut)))
+                            .using(SizeTransform { _, _ -> tween(0) })
                     },
                     label = "cc-page",
                 ) { p ->
@@ -170,6 +190,14 @@ fun ControlCenter(
 private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, onOpen: (android.content.Intent) -> Unit) {
     val context = LocalContext.current
     val first = remember { FocusRequester() }
+    // Firmwares that list their inputs late (see HomeViewModel.refreshSources): look again while
+    // the page is open and still empty. One provider or TvInputManager query every 3 s.
+    LaunchedEffect(Unit) {
+        while (vm.sources.isEmpty()) {
+            vm.refreshSources()
+            delay(3000)
+        }
+    }
     LaunchedEffect(Unit) {
         if (!takeFocus) return@LaunchedEffect
         withFrameNanos { }
@@ -179,7 +207,7 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
     Column {
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
-                BasicText(timeText(now), style = Type.LargeTitle.copy(fontSize = Type.LargeTitle.fontSize * 1.25f))
+                BasicText(timeText(now), style = Type.SmallClock.copy(fontSize = Type.LargeTitle.fontSize * 1.05f))
                 BasicText(dateText(now), style = Type.Callout)
             }
             val net = vm.network
@@ -195,12 +223,12 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
                         NetKind.Offline -> stringResource(R.string.net_offline)
                     },
                     style = Type.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 130.dp),
+                    modifier = Modifier.widthIn(max = 110.dp),
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             RoundButton(Glyph.Input, stringResource(R.string.cc_inputs), focusRequester = first) {
                 // TCL lists no inputs to Android; its own input panel is the next best thing.
@@ -210,22 +238,37 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
             RoundButton(
                 when (vm.network.kind) { NetKind.Ethernet -> Glyph.Ethernet; NetKind.Offline -> Glyph.Offline; else -> Glyph.Wifi },
                 stringResource(R.string.cc_network),
-            ) { vm.whenUnlocked { onOpen(SystemProbe.networkSettingsIntent(context)) } }
+            ) {
+                vm.whenUnlocked {
+                    val pages = SystemProbe.networkSettingsIntents(context, ethernet = vm.network.kind == NetKind.Ethernet)
+                    LaunchFallback.arm(pages.drop(1))
+                    onOpen(pages.first())
+                }
+            }
             RoundButton(Glyph.Gear, stringResource(R.string.cc_settings)) { vm.whenUnlocked { onOpen(SystemProbe.settingsIntent(context)) } }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         VolumeRow(vm)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         BrightnessRow(vm)
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         // How Home looks (wallpaper, screensaver, focus style, hidden apps, weather) lives in one place.
         MenuRow(
             Glyph.Photo,
             stringResource(R.string.cc_personalize),
             onClick = { vm.overlay = Overlay.Wallpaper },
         )
+        // What the TV opens when switched on: easy to forget, and puzzling when it happens.
+        vm.bootTargetLabel()?.let { name ->
+            MenuRow(
+                Glyph.Power,
+                stringResource(R.string.cc_boot),
+                onClick = { vm.overlay = Overlay.ControlCenter(CcPage.InputSettings) },
+                trailing = "$name ›",
+            )
+        }
         Updates.available?.let { latest ->
             MenuRow(
                 Glyph.Info,
@@ -239,7 +282,7 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
             MenuRow(Glyph.Shield, stringResource(R.string.cc_setup_title), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) }, trailing = "›")
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         val (dot, text) = when (vm.homeStatus) {
             HomeStatus.Default -> Palette.Green to stringResource(R.string.cc_home_default)
             HomeStatus.Guarded -> Palette.Green to stringResource(R.string.cc_home_guarded)
@@ -377,11 +420,11 @@ private fun SetupPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.co
 private fun RoundButton(glyph: Glyph, label: String, focusRequester: FocusRequester? = null, onClick: () -> Unit) {
     Pressable(onClick = onClick, focusRequester = focusRequester, focusedScale = 1.1f) { state ->
         val bg by animateColorAsState(if (state.focused) Palette.Focus else Palette.Fill, tween(140, easing = Motion.EaseOut), label = "round-bg")
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
-            Box(Modifier.size(58.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
-                GlyphIcon(glyph, if (state.focused) Palette.OnFocus else Palette.Label, 24.dp)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(64.dp)) {
+            Box(Modifier.size(48.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                GlyphIcon(glyph, if (state.focused) Palette.OnFocus else Palette.Label, 20.dp)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             BasicText(
                 label, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = Type.Caption.copy(color = if (state.focused) Palette.Label else Palette.SecondaryLabel, textAlign = TextAlign.Center),
@@ -442,11 +485,11 @@ private fun SliderRow(
                         while (travelled <= -pitch) { step(-1); travelled += pitch }
                     }
                 }
-                .clip(RoundedCornerShape(16.dp)).background(bg).height(48.dp).padding(horizontal = 16.dp),
+                .clip(RoundedCornerShape(14.dp)).background(bg).height(40.dp).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GlyphIcon(glyph, fg, 20.dp, level = level)
+            GlyphIcon(glyph, fg, 18.dp, level = level)
             Canvas(Modifier.weight(1f).height(6.dp)) {
                 val r = CornerRadius(size.height / 2)
                 drawRoundRect(fg.copy(alpha = 0.2f), cornerRadius = r)
@@ -521,6 +564,7 @@ private fun InputsPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.c
                     SourceKind.Hdmi, SourceKind.DisplayPort -> Glyph.Hdmi
                     SourceKind.Tuner -> Glyph.Antenna
                     SourceKind.Av -> Glyph.Av
+                    SourceKind.Usb -> Glyph.Usb
                     SourceKind.Other -> Glyph.Input
                 },
                 text = source.label,
@@ -576,16 +620,25 @@ private fun InputSettingsPage(vm: HomeViewModel, takeFocus: Boolean) {
         BasicText(stringResource(R.string.cc_inputs_boot), style = Type.Callout, modifier = Modifier.padding(start = 14.dp, bottom = 6.dp))
         ChoiceRow(
             text = stringResource(R.string.cc_inputs_boot_none),
-            selected = vm.sources.none { it.id == AerialSettings.bootSource },
+            selected = !AerialSettings.hasBootTarget,
             focusRequester = null,
-            onClick = { AerialSettings.chooseBootSource(null) },
+            onClick = { vm.chooseBootTarget() },
         )
+        // An app is chosen from its tile's menu; here it only shows, and "nothing" clears it.
+        AerialSettings.bootApp?.let { pkg ->
+            ChoiceRow(
+                text = vm.entry(pkg)?.label ?: pkg,
+                selected = true,
+                focusRequester = null,
+                onClick = {},
+            )
+        }
         vm.sources.forEach { source ->
             ChoiceRow(
                 text = name(source),
                 selected = source.id == AerialSettings.bootSource,
                 focusRequester = null,
-                onClick = { AerialSettings.chooseBootSource(source.id) },
+                onClick = { vm.chooseBootTarget(sourceId = source.id) },
             )
         }
         BasicText(

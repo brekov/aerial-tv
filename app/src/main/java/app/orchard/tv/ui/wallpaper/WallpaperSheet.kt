@@ -1,5 +1,6 @@
 package app.orchard.tv.ui.wallpaper
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -68,6 +69,7 @@ import app.orchard.tv.R
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.settings.FocusStyle
 import app.orchard.tv.settings.UiSounds
+import app.orchard.tv.settings.Effects
 import app.orchard.tv.system.Sounds
 import app.orchard.tv.ui.components.Pressable
 import app.orchard.tv.ui.components.consumeTaps
@@ -128,7 +130,7 @@ fun WallpaperSheet(
         }
     }
 
-    AnimatedVisibility(visible = visible, enter = fadeIn(tween(220)), exit = fadeOut(tween(180)), modifier = Modifier.fillMaxSize()) {
+    AnimatedVisibility(visible = visible, enter = fadeIn(tween(220, easing = Motion.EaseOut)), exit = fadeOut(tween(180, easing = Motion.EaseOut)), modifier = Modifier.fillMaxSize()) {
         // A tap above the sheet closes it, back to Control Center as Back does.
         Box(Modifier.fillMaxSize().dismissOnTap(onDismiss).background(Color.Black.copy(alpha = 0.25f)))
     }
@@ -136,8 +138,8 @@ fun WallpaperSheet(
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(tween(200)) + slideInVertically(tween(380, easing = Motion.Drawer)) { it / 3 },
-            exit = fadeOut(tween(160)) + slideOutVertically(tween(200, easing = Motion.EaseOut)) { it / 4 },
+            enter = fadeIn(tween(200, easing = Motion.EaseOut)) + slideInVertically(tween(380, easing = Motion.Drawer)) { it / 3 },
+            exit = fadeOut(tween(160, easing = Motion.EaseOut)) + slideOutVertically(tween(200, easing = Motion.EaseOut)) { it / 4 },
         ) {
             Row(
                 Modifier
@@ -160,8 +162,16 @@ fun WallpaperSheet(
                     Spacer(Modifier.height(16.dp))
                     SectionTitle(R.string.wp_wallpaper)
                     WallpaperRows()
+                    // Only for a wallpaper that moves: whether keys stop it.
+                    if (Wallpapers.moves()) Group { note ->
+                        Choices(
+                            R.string.st_play, stringResource(R.string.st_play_hint), note,
+                            listOf(false to R.string.st_play_still, true to R.string.st_play_always),
+                            AerialSettings.wallpaperAlwaysMoves, AerialSettings::chooseWallpaperAlwaysMoves, first = true,
+                        )
+                    }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(18.dp))
                     SectionTitle(R.string.ds_section)
                     Group { note ->
                         SettingRow(R.string.ds_source, stringResource(R.string.ds_note), note, first = true) {
@@ -171,11 +181,18 @@ fun WallpaperSheet(
 
                     Spacer(Modifier.height(12.dp))
                     SectionTitle(R.string.st_home_layout)
+                    // What is on Home and where; then the clock; then how the remote feels.
                     Group { note ->
                         Choices(
                             R.string.st_layout, stringResource(R.string.st_home_layout_hint), note,
                             listOf(true to R.string.st_home_one_row, false to R.string.st_home_standard),
                             AerialSettings.oneRowHome, AerialSettings::chooseOneRowHome, first = true,
+                        )
+                        // Two rows show the second row whole; only one row has a peek to hide.
+                        if (AerialSettings.oneRowHome) Choices(
+                            R.string.st_peek, stringResource(R.string.st_peek_hint), note,
+                            listOf(true to R.string.st_peek_show, false to R.string.st_peek_hide),
+                            AerialSettings.peekNextRow, AerialSettings::choosePeekNextRow,
                         )
                         Choices(
                             R.string.st_plate, stringResource(R.string.st_plate_hint), note,
@@ -183,33 +200,14 @@ fun WallpaperSheet(
                             AerialSettings.homePlate, AerialSettings::chooseHomePlate,
                         )
                         Choices(
-                            R.string.st_clock, stringResource(R.string.st_clock_hint), note,
-                            listOf(false to R.string.st_clock_left, true to R.string.st_clock_right),
-                            AerialSettings.clockRight, AerialSettings::chooseClockRight,
-                        )
-                        Choices(
-                            R.string.st_clock_size, stringResource(R.string.st_clock_size_hint), note,
-                            listOf(false to R.string.st_clock_small, true to R.string.st_clock_large),
-                            AerialSettings.largeClock, AerialSettings::chooseLargeClock,
-                        )
-                        Choices(
                             R.string.st_names, stringResource(R.string.st_names_hint), note,
                             listOf(false to R.string.st_names_focused, true to R.string.st_names_all),
                             AerialSettings.showAllNames, AerialSettings::chooseShowAllNames,
                         )
                         Choices(
-                            R.string.st_focus_style,
-                            stringResource(if (AerialSettings.focusStyle == FocusStyle.HighContrast) R.string.st_focus_high_hint else R.string.st_focus_standard_hint),
-                            note,
-                            listOf(FocusStyle.HighContrast to R.string.st_focus_high, FocusStyle.Standard to R.string.st_focus_standard),
-                            AerialSettings.focusStyle, AerialSettings::chooseFocusStyle,
-                        )
-                        Choices(
-                            R.string.st_sounds,
-                            stringResource(if (AerialSettings.uiSounds == UiSounds.Tv) R.string.st_sounds_tv_hint else R.string.st_sounds_hint),
-                            note,
-                            listOf(UiSounds.Tv to R.string.st_sounds_tv, UiSounds.Aerial to R.string.st_sounds_aerial, UiSounds.Off to R.string.st_off),
-                            AerialSettings.uiSounds, { AerialSettings.chooseUiSounds(it); Sounds.prepare() },
+                            R.string.st_icon_library, stringResource(R.string.st_icon_library_hint), note,
+                            listOf(true to R.string.st_icon_library_on, false to R.string.st_icon_library_off),
+                            AerialSettings.iconLibrary, AerialSettings::chooseIconLibrary,
                         )
                         // Apps taken off Home are kept with the rest of how Home looks.
                         SettingRow(R.string.st_hidden_apps, stringResource(R.string.st_hidden_apps_hint), note) {
@@ -220,13 +218,64 @@ fun WallpaperSheet(
                             )
                         }
                     }
+                    Spacer(Modifier.height(10.dp))
+                    Group { note ->
+                        Choices(
+                            R.string.st_clock, stringResource(R.string.st_clock_hint), note,
+                            listOf(false to R.string.st_clock_left, true to R.string.st_clock_right),
+                            AerialSettings.clockRight, AerialSettings::chooseClockRight, first = true,
+                        )
+                        Choices(
+                            R.string.st_clock_size, stringResource(R.string.st_clock_size_hint), note,
+                            listOf(false to R.string.st_clock_small, true to R.string.st_clock_large),
+                            AerialSettings.largeClock, AerialSettings::chooseLargeClock,
+                        )
+                        Choices(
+                            R.string.wp_weather, null, note,
+                            listOf(true to R.string.st_on, false to R.string.st_off),
+                            AerialSettings.showWeather, AerialSettings::chooseShowWeather,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Group { note ->
+                        Choices(
+                            R.string.st_focus_style,
+                            stringResource(if (AerialSettings.focusStyle == FocusStyle.HighContrast) R.string.st_focus_high_hint else R.string.st_focus_standard_hint),
+                            note,
+                            listOf(FocusStyle.HighContrast to R.string.st_focus_high, FocusStyle.Standard to R.string.st_focus_standard),
+                            AerialSettings.focusStyle, AerialSettings::chooseFocusStyle, first = true,
+                        )
+                        Choices(
+                            R.string.st_sounds,
+                            stringResource(if (AerialSettings.uiSounds == UiSounds.Tv) R.string.st_sounds_tv_hint else R.string.st_sounds_hint),
+                            note,
+                            listOf(UiSounds.Tv to R.string.st_sounds_tv, UiSounds.Aerial to R.string.st_sounds_aerial, UiSounds.Off to R.string.st_off),
+                            AerialSettings.uiSounds, { AerialSettings.chooseUiSounds(it); Sounds.prepare() },
+                        )
+                        Choices(
+                            R.string.st_effects,
+                            stringResource(
+                                if (AerialSettings.effects == Effects.Auto && AerialSettings.lowEnd) R.string.st_effects_auto_lite_hint
+                                else R.string.st_effects_hint,
+                            ),
+                            note,
+                            listOf(Effects.Auto to R.string.st_effects_auto, Effects.Full to R.string.st_effects_full, Effects.Lite to R.string.st_effects_lite),
+                            AerialSettings.effects, AerialSettings::chooseEffects,
+                        )
+                    }
 
                     Spacer(Modifier.height(22.dp))
                     SectionTitle(R.string.wp_screensaver)
                     Group { note ->
                         SettingRow(
                             R.string.ss_kind,
-                            if (AerialSettings.backStartsScreensaver) stringResource(R.string.ss_back_hint) else null,
+                            when {
+                                Wallpapers.screensaver == ScreensaverMode.Videos -> stringResource(R.string.ss_videos_hint)
+                                Wallpapers.screensaver == ScreensaverMode.System -> stringResource(R.string.ss_system_hint)
+                                Wallpapers.screensaverFollows -> stringResource(R.string.ss_follow_hint)
+                                AerialSettings.backStartsScreensaver -> stringResource(R.string.ss_back_hint)
+                                else -> null
+                            },
                             note, first = true,
                         ) { ScreensaverChoice(onStartScreensaver) }
                         // Only the qualities this TV can play; a 1080p-only TV has nothing to choose.
@@ -240,9 +289,17 @@ fun WallpaperSheet(
                                 AerialSettings.aerialQuality, AerialSettings::chooseAerialQuality,
                             )
                         }
+                        // The clock screensaver is its clock, and the others show none.
+                        if (Wallpapers.screensaver == ScreensaverMode.Aerial || Wallpapers.screensaver == ScreensaverMode.Photos) Choices(
+                            R.string.ss_show_time, stringResource(R.string.ss_show_time_hint), note,
+                            listOf(true to R.string.st_on, false to R.string.st_off),
+                            AerialSettings.screensaverClock, AerialSettings::chooseScreensaverClock,
+                        )
                         Choices(
                             R.string.ss_delay, null, note,
-                            AerialSettings.screensaverChoices.map { it to stringResource(R.string.ss_minutes, it) },
+                            AerialSettings.screensaverChoices.map {
+                                it to if (it == AerialSettings.NEVER) stringResource(R.string.ss_never) else stringResource(R.string.ss_minutes, it)
+                            },
                             AerialSettings.screensaverMinutes, AerialSettings::chooseScreensaverMinutes,
                         )
                         Choices(
@@ -283,6 +340,12 @@ fun WallpaperSheet(
     }
 }
 
+/**
+ * Every wallpaper in one row, in the order most people want them: the moving aerial, Bing's photo
+ * of the day, the owner's own photos, then a few of the built-in pictures and "Follow App". Past
+ * daily photos and the rest of the built-ins are left out unless one of them is the current
+ * choice. The focused card's note is under the row, as under a group of settings.
+ */
 @Composable
 private fun DailySourceDialog(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
@@ -407,49 +470,69 @@ private fun SourceField(
 @Composable
 private fun WallpaperRows() {
     val items = Wallpapers.items
+    val selected = Wallpapers.selectedId
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
     }
-    val daily = items.filter { it.kind == WallpaperKind.Daily }
-    val rows = buildList {
-        add(R.string.wp_live to items.filter { it.kind == WallpaperKind.Live })
-        if (daily.isNotEmpty()) {
-            add(R.string.wp_daily to listOf(Wallpaper(Wallpapers.LATEST_DAILY, WallpaperKind.Daily, stringResource(R.string.wp_daily_latest))) + daily)
+    val dailyTitle = stringResource(R.string.wp_daily_latest)
+    val rotateTitle = stringResource(R.string.wp_photos_rotate)
+    val list = remember(items, selected, dailyTitle, rotateTitle) {
+        buildList {
+            addAll(items.filter { it.kind == WallpaperKind.Live || it.kind == WallpaperKind.Video })
+            if (items.any { it.kind == WallpaperKind.Daily }) add(Wallpaper(Wallpapers.LATEST_DAILY, WallpaperKind.Daily, dailyTitle))
+            addAll(items.filter { it.kind == WallpaperKind.Daily && it.id == selected })
+            val photos = items.filter { it.kind == WallpaperKind.Photo }
+            // With two or more, one card takes turns through all of them, one a day (#27).
+            if (photos.size > 1) add(Wallpaper(Wallpapers.ROTATE_PHOTOS, WallpaperKind.Photo, rotateTitle))
+            addAll(photos)
+            addAll(items.filter { it.kind == WallpaperKind.Builtin && (it.id in Wallpapers.FEATURED_BUILTINS || it.id == selected) })
+            addAll(items.filter { it.kind == WallpaperKind.Auto })
+            // The inputs' pictures last: a choice for a home with a set-top box, not the usual one.
+            addAll(items.filter { it.kind == WallpaperKind.Source })
         }
-        items.filter { it.kind == WallpaperKind.Photo }.takeIf { it.isNotEmpty() }?.let { photos ->
-            // With two or more, the first card takes turns through all of them, one a day (#27).
-            val rotate = if (photos.size > 1) listOf(Wallpaper(Wallpapers.ROTATE_PHOTOS, WallpaperKind.Photo, stringResource(R.string.wp_photos_rotate))) else emptyList()
-            add(R.string.wp_photos to rotate + photos)
-        }
-        add(R.string.wp_builtin to items.filter { it.kind == WallpaperKind.Builtin || it.kind == WallpaperKind.Auto })
     }
-    rows.forEachIndexed { r, (title, list) ->
-        BasicText(stringResource(title), style = Type.Callout)
-        Spacer(Modifier.height(8.dp))
-        // A row clips to its bounds, and the focused card grows by 8%: room on the left for that,
-        // with the row moved back by as much so the cards still line up with the titles.
-        LazyRow(
-            modifier = Modifier.offset(x = (-10).dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(start = 14.dp, end = 24.dp, top = 6.dp, bottom = 4.dp),
-        ) {
-            items(list, key = { it.id }) { wp ->
-                WallpaperCard(wp, if (r == 0 && wp === list.first()) first else null)
-            }
+    var note by remember { mutableStateOf<String?>(null) }
+    // A row clips to its bounds, and the focused card grows by 8%: room on the left for that,
+    // with the row moved back by as much so the cards still line up with the titles.
+    LazyRow(
+        modifier = Modifier.offset(x = (-10).dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        contentPadding = PaddingValues(start = 14.dp, end = 24.dp, top = 6.dp, bottom = 4.dp),
+    ) {
+        items(list, key = { it.id }) { wp ->
+            val hint = wallpaperNote(wp)
+            WallpaperCard(wp, if (wp === list.first()) first else null, onFocused = { note = hint })
         }
-        Spacer(Modifier.height(12.dp))
+    }
+    Box(Modifier.height(42.dp).padding(start = 4.dp, top = 8.dp)) {
+        note?.let { BasicText(it, style = Type.Caption.copy(color = Palette.TertiaryLabel), maxLines = 2, overflow = TextOverflow.Ellipsis) }
     }
 }
 
+/** What a wallpaper card is, for the note under the row; null where its picture says it all. */
 @Composable
-private fun WallpaperCard(wp: Wallpaper, focusRequester: FocusRequester?) {
+private fun wallpaperNote(wp: Wallpaper): String? = when {
+    wp.kind == WallpaperKind.Live -> stringResource(R.string.wp_live)
+    wp.kind == WallpaperKind.Video -> stringResource(R.string.wp_videos_note)
+    wp.kind == WallpaperKind.Source -> stringResource(R.string.wp_source_note)
+    wp.id == Wallpapers.LATEST_DAILY -> stringResource(R.string.wp_daily_note)
+    wp.id == Wallpapers.ROTATE_PHOTOS -> stringResource(R.string.wp_photos_rotate_note)
+    wp.kind == WallpaperKind.Photo -> stringResource(R.string.wp_photo_note)
+    wp.kind == WallpaperKind.Auto -> stringResource(R.string.wp_auto_note)
+    wp.kind == WallpaperKind.Daily -> wp.caption
+    else -> null
+}
+
+@Composable
+private fun WallpaperCard(wp: Wallpaper, focusRequester: FocusRequester?, onFocused: () -> Unit) {
     val selected = Wallpapers.selectedId == wp.id
     val thumb by produceState<ImageBitmap?>(null, wp.id, Wallpapers.items) {
         value = withContext(Dispatchers.Default) { Wallpapers.thumbnail(wp.id)?.asImageBitmap() }
     }
     Pressable(onClick = { Wallpapers.select(wp.id) }, focusRequester = focusRequester, focusedScale = 1.08f) { state ->
+        LaunchedEffect(state.focused) { if (state.focused) onFocused() }
         Column(Modifier.width(168.dp)) {
             Box(
                 Modifier
@@ -478,8 +561,12 @@ private fun WallpaperCard(wp: Wallpaper, focusRequester: FocusRequester?) {
                     ) { GlyphIcon(Glyph.Check, Palette.OnFocus, 13.dp) }
                 }
                 // The aerial wallpaper moves; its card shows the last frame it stopped on.
-                if (wp.kind == WallpaperKind.Live) {
+                if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video) {
                     GlyphIcon(Glyph.Play, Color.White, 22.dp, Modifier.align(Alignment.BottomStart).padding(7.dp))
+                }
+                // An input's picture cannot be copied for a card: its mark over the dark picture.
+                if (wp.kind == WallpaperKind.Source) {
+                    GlyphIcon(Glyph.Hdmi, Color.White, 34.dp, Modifier.align(Alignment.Center))
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -644,6 +731,8 @@ private fun ScreensaverChoice(onStart: () -> Unit) {
             ScreensaverMode.Aerial to R.string.ss_aerial,
             ScreensaverMode.Photos to R.string.ss_photos,
             ScreensaverMode.Clock to R.string.ss_clock,
+            ScreensaverMode.Videos to R.string.ss_videos,
+            ScreensaverMode.System to R.string.ss_system,
         ).forEach { (mode, label) ->
             Chip(stringResource(label), on = Wallpapers.screensaver == mode) { Wallpapers.chooseScreensaver(mode) }
         }

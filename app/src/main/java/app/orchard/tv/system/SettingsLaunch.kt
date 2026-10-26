@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.os.SystemClock
 
 /**
  * Some AOSP TV Settings builds show MainSettings as a translucent right-hand panel. Starting it
@@ -29,4 +30,34 @@ internal fun settingsLaunchIntent(context: Context, intent: Intent): Intent {
         info.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM == 0
     ) return intent
     return Intent(intent).apply { flags = flags and Intent.FLAG_ACTIVITY_NEW_TASK.inv() }
+}
+
+/**
+ * Pages to open instead when the one just opened closes at once, which Aerial sees as being back
+ * in front within a moment of opening it. See SystemProbe.networkSettingsIntents.
+ */
+internal object LaunchFallback {
+    private var rest: List<Intent> = emptyList()
+    private var armedAt = 0L
+
+    fun arm(rest: List<Intent>) {
+        this.rest = rest
+        armedAt = SystemClock.uptimeMillis()
+    }
+
+    /** The next page to try, if Aerial is back too soon after the last one; called on resume. */
+    fun next(): Intent? {
+        val pages = rest
+        rest = emptyList()
+        if (pages.isEmpty() || SystemClock.uptimeMillis() - armedAt > BOUNCE_MS) return null
+        arm(pages.drop(1))
+        return pages.first()
+    }
+
+    /**
+     * Xiaomi MiTV-ANSP0 closed MitvWifiActivity 0.2 s after it opened (issue #331). At 2 s a look at
+     * Xiaomi's Wi-Fi page and Back (1.3 s, MiTV-MFTR0) opened Android's after it, and Back from that
+     * the settings app.
+     */
+    private const val BOUNCE_MS = 800L
 }
