@@ -16,6 +16,7 @@
     <span class="badge {{ 'ok' if providers.providers[providers.defaultProvider].configured else 'warn' }}">
       AI {{ 'ready' if providers.providers[providers.defaultProvider].configured else 'not configured' }}
     </span>
+    <button id="lang-toggle" type="button" class="ghost small lang-toggle">English</button>
     <form method="post" action="/admin/logout"><button class="ghost" type="submit">Sign out</button></form>
   </div>
 </header>

@@ -13,6 +13,7 @@
   {% if error %}
     <div class="alert error">{{ error }}</div>
   {% endif %}
+  <button id="lang-toggle" type="button" class="ghost lang-toggle">English</button>
   <form method="post" action="/admin/login" autocomplete="off">
     <input type="hidden" name="next" value="{{ next }}">
     <label for="password">Password</label>

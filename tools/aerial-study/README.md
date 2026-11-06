@@ -15,6 +15,8 @@ images and create/manage questions by hand.
 
 ---
 
+The admin UI is bilingual (Chinese default, English toggle) and responsive for phones/tablets.
+
 ## Architecture
 
 ```

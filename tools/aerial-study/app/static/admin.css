@@ -268,3 +268,62 @@ label.checkbox input { width: auto; min-height: 0; }
   .layout, .provider-grid, .status-row { grid-template-columns: 1fr; }
   .topbar { position: static; flex-direction: column; }
 }
+
+/* ---------- language toggle ---------- */
+.lang-toggle { white-space: nowrap; }
+.login-card .lang-toggle { margin-top: 12px; justify-self: end; }
+.admin-page .lang-toggle { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+
+/* ---------- mobile / tablet ---------- */
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  .topbar {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .topbar h1 { font-size: 19px; }
+  .topbar-actions { width: 100%; gap: 8px; }
+  .topbar-actions .badge { font-size: 10px; }
+  .topbar-actions form { margin-left: auto; }
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px 12px 0;
+  }
+  .card { padding: 10px; }
+  .card-value { font-size: 21px; }
+  .card-hint { font-size: 10px; }
+  .layout { padding: 12px 12px 28px; gap: 12px; }
+  .panel { padding: 12px; border-radius: 10px; }
+  .panel-head { align-items: flex-start; }
+  .panel-head h2 { font-size: 16px; }
+  .row-form { flex-direction: column; }
+  .row-form > * { width: 100% !important; flex: 1 1 auto !important; }
+  .two-col { grid-template-columns: 1fr; }
+  .inline-search { width: 100%; }
+  .inline-search input { width: 100%; flex: 1 1 auto; }
+  .filters { width: 100%; }
+  .filters .chip { padding: 5px 9px; }
+  .settings-form { align-items: stretch; flex-direction: column; }
+  .settings-form label:not(.checkbox) { min-width: 0; width: 100%; }
+  .settings-form button { width: 100%; }
+  .material-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .material img { height: 84px; }
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .table { font-size: 12px; }
+  .table th, .table td { padding: 6px 6px; }
+  .thumb { width: 36px; height: 36px; }
+  .toasts { left: 12px; right: 12px; bottom: 12px; }
+  .toast { max-width: none; }
+  .login-card { width: calc(100vw - 24px); padding: 22px; }
+  .login-card .lang-toggle { justify-self: stretch; }
+  .actions { gap: 5px; }
+  .actions button { padding: 6px 9px; }
+  button, input, select { touch-action: manipulation; }
+}
+
+@media (max-width: 380px) {
+  .cards { grid-template-columns: 1fr; }
+  .material-grid { grid-template-columns: 1fr; }
+  .topbar h1 { font-size: 18px; }
+}

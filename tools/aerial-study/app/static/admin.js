@@ -10,7 +10,7 @@
     if (!host) return;
     const el = document.createElement("div");
     el.className = `toast ${kind}`;
-    el.textContent = message;
+    el.textContent = window.studyTranslate ? window.studyTranslate(message) : message;
     host.appendChild(el);
     setTimeout(() => el.remove(), kind === "error" ? 7000 : 3500);
   }
@@ -202,6 +202,7 @@
           <td class="mono small">${escapeHtml(revision.createdAt)}</td>
         </tr>`).join("");
       revisionPanel.hidden = false;
+      window.studyTranslateDom?.(revisionPanel);
       revisionPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       toast(err.message, "error");
@@ -248,6 +249,7 @@
             </tr>`).join("")}</tbody>
         </table></div>`;
       sessionPanel.hidden = false;
+      window.studyTranslateDom?.(sessionPanel);
       sessionPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       toast(err.message, "error");
