@@ -6,6 +6,10 @@ import android.content.Intent
 import app.orchard.tv.apps.TileSheet
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.settings.Restricted
+import app.orchard.tv.study.StudyOverlay
+import app.orchard.tv.study.StudySettings
+import app.orchard.tv.study.StudyMicProbe
+import app.orchard.tv.study.StudyWatch
 import app.orchard.tv.settings.Effects
 import app.orchard.tv.system.DeviceProfile
 import app.orchard.tv.system.DiagLog
@@ -41,11 +45,35 @@ import kotlinx.coroutines.launch
  *                                   until Aerial restarts; for trying an update before a release)
  *   ... --ez update_test_self true  (the same with the APK Aerial runs from: a reinstall, for TVs whose
  *                                   shell cannot write Android/data, as TCL MT5879's)
+ *   ... --ez study_enabled true --es study_url http://saboop.local:8900
+ *       --es study_token <device token> --ei study_interval_min 6
+ *   ... --ez study_test true       (show the study overlay now, for trying it)
+ *
  * The manifest requires the sender to hold WRITE_SECURE_SETTINGS, which the ADB shell has and
  * ordinary apps cannot get, so no other app on the TV can flip these.
  */
 class ConfigReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.getBooleanExtra("study_mic_probe", false)) {
+            StudyMicProbe.start(context)
+            resultData = "mic_probe=started"
+            return
+        }
+        if (intent.hasExtra("study_enabled") || intent.hasExtra("study_url") ||
+            intent.hasExtra("study_token") || intent.hasExtra("study_interval_min") ||
+            intent.getBooleanExtra("study_test", false)
+        ) {
+            StudySettings.init(context)
+            if (intent.hasExtra("study_enabled")) StudySettings.enabled = intent.getBooleanExtra("study_enabled", false)
+            intent.getStringExtra("study_url")?.let { StudySettings.baseUrl = it }
+            intent.getStringExtra("study_token")?.let { StudySettings.deviceToken = it }
+            if (intent.hasExtra("study_interval_min")) StudySettings.intervalMinutes = intent.getIntExtra("study_interval_min", 6)
+            StudyWatch.start(context)
+            if (!StudySettings.enabled) StudyOverlay.dismiss()
+            val shown = intent.getBooleanExtra("study_test", false) && StudyOverlay.show(context)
+            resultData = StudySettings.diagnostic() + if (shown) " overlay=shown" else ""
+            return
+        }
         // ... --es export_tiles <name>   (every tile on one picture; see TileSheet)
         // Runs on past the broadcast's time limit; Home keeps the process alive. Look for the file.
         intent.getStringExtra("export_tiles")?.takeIf { Regex("^[A-Za-z0-9_-]+$").matches(it) }?.let { name ->

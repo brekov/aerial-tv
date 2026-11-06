@@ -71,6 +71,7 @@ import app.orchard.tv.ui.theme.canvasDensity
 import app.orchard.tv.ui.components.UhdCanvas
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.settings.Restricted
+import app.orchard.tv.study.StudyWatch
 import app.orchard.tv.guard.KidsWatch
 import app.orchard.tv.apps.SOURCE_KEY_PREFIX
 import app.orchard.tv.wallpaper.PhoneServer
@@ -270,6 +271,7 @@ class MainActivity : ComponentActivity() {
         AerialSettings.init(this)
         Restricted.init(this)
         KidsWatch.start(this)
+        StudyWatch.start(this)
         // After the settings: the artwork's size follows the number of apps a row.
         TileArtFactory.useCanvasDensity(canvasDensity(resources.displayMetrics) * uhd)
         Sounds.init(this)

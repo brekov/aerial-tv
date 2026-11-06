@@ -331,4 +331,14 @@
     <string name="ds_unreachable">Server unreachable, or the token is wrong.</string>
     <string name="ds_probe_failed">No LAN daily server found.</string>
     <string name="ds_bing_now">Bing restored.</string>
+    <string name="study_title">Watch and learn</string>
+    <string name="study_loading">Loading questions…</string>
+    <string name="study_listening">Say the answer</string>
+    <string name="study_recognizing">Recognising…</string>
+    <string name="study_right">Correct</string>
+    <string name="study_wrong">Wrong — starting again</string>
+    <string name="study_passed">You may keep watching</string>
+    <string name="study_error">Study service is not available</string>
+    <string name="study_no_speech">I did not hear you; please say it again</string>
+    <string name="study_question">Question %1$d of %2$d</string>
 </resources>

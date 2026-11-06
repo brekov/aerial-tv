@@ -36,6 +36,9 @@
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Study Guard's own RecognitionService captures the TV's bottom/USB microphone over the
+         LAN to the NAS; never requested through a UI prompt. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Which app is in front, where a launcher hides from accessibility (Xiaomi PatchWall on
          Android 6, issue #81); granted over ADB. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -114,6 +117,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Standard RecognitionService backed by the TV microphone and the NAS Whisper service;
+             Aerial binds it explicitly for Study Guard. -->
+        <service
+            android:name=".study.AerialRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

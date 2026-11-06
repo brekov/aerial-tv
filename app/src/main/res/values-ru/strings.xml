@@ -300,4 +300,14 @@
     <string name="kids_blocked">«%s» здесь недоступно</string>
     <string name="kids_warn">Осталось %d мин</string>
     <string name="kids_warn_break">Перерыв через %d мин</string>
+    <string name="study_title">Смотри и учись</string>
+    <string name="study_loading">Загрузка вопросов…</string>
+    <string name="study_listening">Скажите ответ</string>
+    <string name="study_recognizing">Распознавание…</string>
+    <string name="study_right">Верно</string>
+    <string name="study_wrong">Ошибка — начнём заново</string>
+    <string name="study_passed">Можно продолжать смотреть</string>
+    <string name="study_error">Сервис обучения недоступен</string>
+    <string name="study_no_speech">Не расслышал; скажите ещё раз</string>
+    <string name="study_question">Вопрос %1$d из %2$d</string>
 </resources>

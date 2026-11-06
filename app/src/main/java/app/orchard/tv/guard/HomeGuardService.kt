@@ -35,6 +35,8 @@ import androidx.core.content.getSystemService
 import app.orchard.tv.MainActivity
 import app.orchard.tv.dream.AerialDream
 import app.orchard.tv.settings.AerialSettings
+import app.orchard.tv.study.StudyOverlay
+import app.orchard.tv.study.StudyWatch
 import app.orchard.tv.system.BootOpen
 import app.orchard.tv.system.CoocaaHome
 import app.orchard.tv.system.DeviceProfile
@@ -412,6 +414,7 @@ class HomeGuardService : AccessibilityService() {
         activityCache.clear()
         refreshStockHomes()
         KidsWatch.start(this@HomeGuardService)
+        StudyWatch.start(this@HomeGuardService)
         checkMouseWithFilter(this@HomeGuardService)
         restartForegroundCheck()
         watchCecInput()
@@ -718,6 +721,7 @@ class HomeGuardService : AccessibilityService() {
         // receiver starts them instead.
         if (GuardSetup.isUserUnlocked(this)) {
             KidsWatch.start(this)
+            StudyWatch.start(this)
             BootOpen.noteStartedInStandby(this)
         }
         checkMouseWithFilter(this)
@@ -1087,12 +1091,13 @@ class HomeGuardService : AccessibilityService() {
         // first MotionEvent threw in system_server 0.5 s after it connected (issue #1109, the
         // reporter's crash log; 1.75, which stopped filtering for any mouse, never did).
         val mouseHang = mouseAttached && (xiaomiInput || mouseDownedSystem(this))
+        val studyWanted = StudyOverlay.active
         val wanted = !keysPassThrough && !screenOff && !padGame && !mouseHang &&
-            (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront || always)
+            (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront || always || studyWanted)
         val homeWanted = wanted && (!isDefaultHome() || defaultHomeNeedsHomeFilter)
         val cecWanted = !screenOff && !mouseHang && CecHome.active(this, lastWindow?.first)
         filteringForCecOnly = cecWanted && !homeWanted
-        var want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
+        var want = if (homeWanted || cecWanted || studyWanted) info.flags or flag else info.flags and flag.inv()
         if (GuardSetup.isUserUnlocked(this) && DeviceProfile.current(this).neverFilterKeys) want = want and flag.inv()
         if (keyFilterRival) want = want and AccessibilityServiceInfo.DEFAULT.inv()
         if (want == info.flags) return
@@ -1217,6 +1222,9 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         keySeen = true
+        // The study quiz owns every key but power: no Home, Back, voice/assistant key or app switch
+        // may leave it. Voice assistant windows are also dismissed in onAccessibilityEvent.
+        if (StudyOverlay.active) return event.keyCode != KeyEvent.KEYCODE_POWER
         if (!GuardSetup.isUserUnlocked(this)) return false
         if (event.keyCode in VOLUME_KEYS) {
             return if (filteringForCecOnly || (isDefaultHome() && defaultHomeNeedsHomeFilter)) {
@@ -1512,6 +1520,18 @@ class HomeGuardService : AccessibilityService() {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val cls = event.className?.toString() ?: return
+        if (StudyOverlay.active) {
+            // Xiao Ai is a privileged system app with its own voice window. Its raw audio/ASR cannot
+            // be intercepted; close its window and keep the quiz on top instead of silently
+            // letting a voice command leave the quiz.
+            if (pkg == "com.xiaomi.voicecontrol" || pkg.startsWith("com.xiaomi.voicecontrol.") ||
+                pkg.startsWith("com.xiaomi.mitv.settings") || pkg.startsWith("com.android.tv.settings") ||
+                pkg.startsWith("com.android.settings")) {
+                Log.i(TAG, "$pkg window during the study quiz; dismissing it")
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                return
+            }
+        }
         // Only activities count as what is in front. Overlays and dialogs also raise this event:
         // TCL's voice assistant (com.tcl.walleve) does at boot on TCL 75S365C, and taking it for
         // an app the viewer chose kept the guard from taking over (PR #45).
@@ -2211,6 +2231,15 @@ class HomeGuardService : AccessibilityService() {
          * drawn as the accessibility service's own overlay: no other permission is needed. False
          * where it cannot be (no guard, Android 5.0).
          */
+        /** The bound accessibility service, for the full-screen study overlay. */
+        fun studyService(): HomeGuardService? = instance
+
+        /** Recompute the key filter after the study overlay opens or closes. */
+        fun studyOverlayChanged() {
+            val s = instance ?: return
+            s.handler.post { s.updateKeyFilter() }
+        }
+
         fun showBanner(text: String): Boolean {
             val s = instance ?: return false
             if (Build.VERSION.SDK_INT < 22) return false

@@ -300,4 +300,14 @@
     <string name="kids_blocked">«%s» мұнда қолжетімсіз</string>
     <string name="kids_warn">%d мин қалды</string>
     <string name="kids_warn_break">%d минуттан кейін үзіліс</string>
+    <string name="study_title">Көр және үйрен</string>
+    <string name="study_loading">Сұрақтар жүктелуде…</string>
+    <string name="study_listening">Жауапты айтыңыз</string>
+    <string name="study_recognizing">Танылуда…</string>
+    <string name="study_right">Дұрыс</string>
+    <string name="study_wrong">Қате — қайта бастаймыз</string>
+    <string name="study_passed">Қарауды жалғастыруға болады</string>
+    <string name="study_error">Оқу қызметі қолжетімсіз</string>
+    <string name="study_no_speech">Естілмеді; қайта айтыңыз</string>
+    <string name="study_question">%1$d / %2$d сұрақ</string>
 </resources>
