@@ -98,6 +98,26 @@ class PhoneServer private constructor(private val context: Context, private val 
                     onMain { Weather.useNetworkLocation() }
                     json(state())
                 }
+                session.method == Method.POST && path == "/api/daily/source" -> {
+                    val url = form(session)["url"].orEmpty()
+                    val ok = DailySource.normalize(url) != null &&
+                        runBlocking(Dispatchers.IO) { DailySource.setIfHealthy(context, url) }
+                    if (ok) onMain { Wallpapers.refreshDailyNow() }
+                    json(state().put("ok", ok))
+                }
+                session.method == Method.POST && path == "/api/daily/probe" -> {
+                    val found = runBlocking(Dispatchers.IO) { DailySource.probe(context) }
+                    val ok = found != null && DailySource.save(context, found)
+                    if (ok) onMain { Wallpapers.refreshDailyNow() }
+                    json(state().put("ok", ok).put("found", found ?: ""))
+                }
+                session.method == Method.POST && path == "/api/daily/bing" -> {
+                    onMain {
+                        DailySource.clear(context)
+                        Wallpapers.refreshDailyNow()
+                    }
+                    json(state())
+                }
                 else -> text(Response.Status.NOT_FOUND, "Not found")
             }
         }.getOrElse {
@@ -133,6 +153,10 @@ class PhoneServer private constructor(private val context: Context, private val 
                     put(JSONObject().put("key", a.key).put("label", label).put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key))
                         .apply { a.source?.let { put("source", true).put("port", it.label).put("name", SourceLooks.of(it.id)?.name ?: "").put("look", SourceLooks.of(it.id).hashCode()) } })
                 }
+            })
+            .put("daily", JSONObject().apply {
+                put("custom", DailySource.customBase(context) ?: "")
+                put("default", DailySource.BING_BASE)
             })
             .put("weather", JSONObject().apply {
                 put("place", Weather.place ?: "")

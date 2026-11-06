@@ -62,7 +62,8 @@ object Updates {
         if (started) return
         started = true
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        available = prefs.getString("latest", null)?.takeIf { newer(it, current) }
+        available = if (BuildConfig.DISABLE_UPDATE_CHECK) null
+        else prefs.getString("latest", null)?.takeIf { newer(it, current) }
         // A download left from an install that has since finished or been given up.
         scope.launch(Dispatchers.IO) {
             apkFile(context).takeIf { System.currentTimeMillis() - it.lastModified() > 60 * 60 * 1000L }?.delete()
@@ -71,6 +72,7 @@ object Updates {
 
     /** [force]: now, however recently it last looked (ConfigReceiver's check_update). */
     fun checkIfStale(force: Boolean = false) {
+        if (BuildConfig.DISABLE_UPDATE_CHECK) return
         if (!started) return
         val now = System.currentTimeMillis()
         if (!force && (now - lastAttempt < RETRY_MS || now - prefs.getLong("checked_at", 0) < CHECK_EVERY_MS)) return

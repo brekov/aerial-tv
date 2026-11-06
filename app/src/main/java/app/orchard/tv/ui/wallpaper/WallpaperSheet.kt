@@ -33,6 +33,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,13 +48,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -72,6 +76,7 @@ import app.orchard.tv.ui.theme.GlyphIcon
 import app.orchard.tv.ui.theme.Motion
 import app.orchard.tv.ui.theme.Palette
 import app.orchard.tv.ui.theme.Type
+import app.orchard.tv.wallpaper.DailySource
 import app.orchard.tv.wallpaper.PhoneServer
 import app.orchard.tv.wallpaper.AerialFormats
 import app.orchard.tv.wallpaper.AerialQuality
@@ -104,6 +109,7 @@ fun WallpaperSheet(
     val context = LocalContext.current
     var phoneUrl by remember { mutableStateOf<String?>(null) }
     var qr by remember { mutableStateOf<ImageBitmap?>(null) }
+    var showDaily by remember { mutableStateOf(false) }
 
     BackHandler(enabled = visible, onBack = onDismiss)
 
@@ -152,6 +158,17 @@ fun WallpaperSheet(
                     Spacer(Modifier.height(16.dp))
                     SectionTitle(R.string.wp_wallpaper)
                     WallpaperRows()
+
+                    Spacer(Modifier.height(12.dp))
+                    SectionTitle(R.string.ds_section)
+                    Group { note ->
+                        SettingRow(R.string.ds_source, stringResource(R.string.ds_note), note, first = true) {
+                            ActionChip(
+                                DailySource.customBase(context)?.removePrefix("http://") ?: "Bing",
+                                Glyph.ChevronRight,
+                            ) { showDaily = true }
+                        }
+                    }
 
                     Spacer(Modifier.height(12.dp))
                     SectionTitle(R.string.st_home_layout)
@@ -256,6 +273,101 @@ fun WallpaperSheet(
                 PhoneCard(phoneUrl, qr)
             }
         }
+        if (showDaily) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).dismissOnTap { showDaily = false },
+                contentAlignment = Alignment.Center,
+            ) {
+                DailySourceDialog(onClose = { showDaily = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailySourceDialog(onClose: () -> Unit) {
+    BackHandler(onBack = onClose)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var text by remember { mutableStateOf(DailySource.customBase(context) ?: "") }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        keyboard?.show()
+    }
+    Column(
+        Modifier.width(560.dp).liquidGlass(28.dp).padding(26.dp).consumeTaps(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        BasicText(stringResource(R.string.ds_title), style = Type.Headline)
+        BasicText(
+            stringResource(R.string.ds_current, DailySource.label(context)),
+            style = Type.Caption.copy(color = Palette.SecondaryLabel),
+        )
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = Type.Body.copy(color = Palette.Label),
+            cursorBrush = SolidColor(Palette.Focus),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Palette.Fill)
+                .padding(12.dp)
+                .focusRequester(focus)
+                .onFocusChanged { if (it.isFocused) keyboard?.show() },
+        )
+        BasicText(stringResource(R.string.ds_hint), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ActionChip(if (busy) stringResource(R.string.ds_probing) else stringResource(R.string.ds_probe), Glyph.Globe) {
+                if (!busy) {
+                    busy = true
+                    status = null
+                    scope.launch {
+                        val found = DailySource.probe(context)
+                        busy = false
+                        if (found != null && DailySource.save(context, found)) {
+                            text = found
+                            status = context.getString(R.string.ds_found, found)
+                            Wallpapers.refreshDailyNow()
+                        } else {
+                            status = context.getString(R.string.ds_probe_failed)
+                        }
+                    }
+                }
+            }
+            ActionChip(stringResource(R.string.ds_save), Glyph.Check) {
+                if (!busy) {
+                    if (DailySource.normalize(text) == null) {
+                        status = context.getString(R.string.ds_invalid)
+                    } else {
+                        busy = true
+                        status = null
+                        scope.launch {
+                            val ok = DailySource.setIfHealthy(context, text)
+                            busy = false
+                            if (ok) {
+                                status = context.getString(R.string.ds_saved)
+                                Wallpapers.refreshDailyNow()
+                            } else {
+                                status = context.getString(R.string.ds_unreachable)
+                            }
+                        }
+                    }
+                }
+            }
+            ActionChip(stringResource(R.string.ds_bing), Glyph.Cloud) {
+                DailySource.clear(context)
+                Wallpapers.refreshDailyNow()
+                status = context.getString(R.string.ds_bing_now)
+            }
+            ActionChip(stringResource(R.string.ds_cancel), Glyph.ChevronLeft, onClose)
+        }
+        status?.let { BasicText(it, style = Type.Caption.copy(color = Palette.SecondaryLabel)) }
     }
 }
 

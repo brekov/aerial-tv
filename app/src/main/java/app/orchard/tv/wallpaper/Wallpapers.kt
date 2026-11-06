@@ -1,6 +1,7 @@
 package app.orchard.tv.wallpaper
 
 import android.content.Context
+import app.orchard.tv.BuildConfig
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
@@ -292,9 +293,19 @@ object Wallpapers {
 
     suspend fun refreshDaily() = io.withLock {
         lastDailyRefresh = System.currentTimeMillis()
+        val custom = DailySource.customBase(app)
+        val base = custom ?: DailySource.BING_BASE
         val added = withContext(Dispatchers.IO) {
             runCatching {
-                val json = JSONObject(get("https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN").decodeToString())
+                // Date is the cache key, and Bing and the NAS source can offer the same date:
+                // drop the old cache when the source changes so pictures never mix.
+                val sourceKey = custom ?: "bing"
+                if (prefs.getString("daily_source_key", null) != sourceKey) {
+                    dailyDir.listFiles { f -> f.extension == "jpg" || f.name == "index.json" }?.forEach { it.delete() }
+                    prefs.edit { putString("daily_source_key", sourceKey) }
+                }
+                val jsonUrl = if (custom == null) DailySource.BING_JSON else "$base/daily.json"
+                val json = JSONObject(get(jsonUrl, withToken = custom != null).decodeToString())
                 val images = json.getJSONArray("images")
                 val index = JSONArray()
                 for (i in 0 until images.length()) {
@@ -304,19 +315,23 @@ object Wallpapers {
                     if (!file.exists()) {
                         // url is the 1920×1080 picture; a UI drawn above 1080p gets the UHD one.
                         val path = if (screenW > 1920) img.getString("urlbase") + "_UHD.jpg" else img.getString("url")
-                        val bytes = get("https://cn.bing.com" + path)
-                        file.writeBytes(bytes)
+                        val imageUrl = if (path.startsWith("http://") || path.startsWith("https://")) path else base + path
+                        file.writeBytes(get(imageUrl, withToken = custom != null))
                     }
                     val copyright = img.optString("copyright")
                     val title = img.optString("title").ifBlank { copyright.substringBefore(" (").ifBlank { date } }
                     index.put(JSONObject().put("date", date).put("title", title).put("caption", copyright))
                 }
                 File(dailyDir, "index.json").writeText(index.toString())
-                // Keep only what Bing still lists.
+                // Keep only what the source still lists.
                 val keep = (0 until index.length()).map { index.getJSONObject(it).getString("date") + ".jpg" }.toSet()
                 dailyDir.listFiles { f -> f.extension == "jpg" && f.name !in keep }?.forEach { it.delete() }
                 true
-            }.onFailure { Log.w(TAG, "daily photos unavailable", it) }.isSuccess.also { dailyFailed = !it }
+            }.onFailure {
+                // A custom NAS source that is down must not wipe the pictures already on the TV.
+                if (custom == null) Log.w(TAG, "daily photos unavailable", it)
+                else Log.w(TAG, "custom daily source unavailable, keeping the cached photos", it)
+            }.isSuccess.also { dailyFailed = !it }
         }
         retryDailyLater()
         if (added) {
@@ -326,8 +341,16 @@ object Wallpapers {
         }
     }
 
-    private fun get(url: String): ByteArray {
+    /** Refresh now (after the daily source was changed). */
+    fun refreshDailyNow() {
+        if (!started) return
+        lastDailyRefresh = 0
+        scope.launch { refreshDaily() }
+    }
+
+    private fun get(url: String, withToken: Boolean = false): ByteArray {
         val c = URL(url).openConnection() as HttpURLConnection
+        if (withToken) c.setRequestProperty("X-Aerial-Token", BuildConfig.DAILY_TOKEN)
         c.connectTimeout = 10_000
         c.readTimeout = 20_000
         return c.inputStream.use { it.readBytes() }.also { c.disconnect() }

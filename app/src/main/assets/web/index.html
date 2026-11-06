@@ -133,6 +133,19 @@
 </form>
 <p class="hint" id="wxHint"></p>
 
+<h2>每日图源</h2>
+<div class="group" style="padding:14px 16px">
+  <div class="city">
+    <input id="dailyUrl" type="text" placeholder="http://192.168.1.75:8899" autocomplete="off">
+    <button id="dailySave">保存</button>
+  </div>
+  <p class="hint" id="dailyHint"></p>
+  <div class="row">
+    <button class="upload" id="dailyProbe">探测局域网</button>
+    <button class="upload plain" id="dailyBing">恢复 Bing</button>
+  </div>
+</div>
+
 <h2>从手机添加</h2>
 <label class="upload" id="uploadBtn">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
@@ -268,7 +281,17 @@ function renderApps() {
   }
 }
 
+function renderDaily() {
+  const d = state.daily || {};
+  const input = $('#dailyUrl');
+  if (document.activeElement !== input) input.value = d.custom || '';
+  $('#dailyHint').textContent = d.custom
+    ? `当前：${d.custom}`
+    : '默认使用 Bing；可填写 http://局域网地址:8899 或点「探测局域网」自动发现。';
+}
+
 function render() {
+  renderDaily();
   renderWeather();
   renderApps();
   document.querySelectorAll('#ss button').forEach(b =>
@@ -310,6 +333,38 @@ document.querySelectorAll('#ss button').forEach(b => b.onclick = async () => {
 document.querySelectorAll('#focus button').forEach(b => b.onclick = async () => {
   state = await api('api/focus', { style: b.dataset.style }); render(); toast('电视上已更新');
 });
+
+$('#dailySave').onclick = async () => {
+  const btn = $('#dailySave');
+  btn.disabled = true;
+  try {
+    const r = await api('api/daily/source', { url: $('#dailyUrl').value });
+    state = r;
+    toast(r.ok ? '已保存每日图源' : '地址无效或不可用');
+    render();
+  } catch (e) { toast('保存失败'); }
+  finally { btn.disabled = false; }
+};
+
+$('#dailyProbe').onclick = async () => {
+  const btn = $('#dailyProbe');
+  btn.disabled = true; btn.textContent = '探测中…';
+  try {
+    const r = await api('api/daily/probe', {});
+    state = r;
+    if (r.ok) { toast('已找到并切换'); render(); }
+    else toast('未找到局域网图源');
+  } catch (e) { toast('探测失败'); }
+  finally { btn.disabled = false; btn.textContent = '探测局域网'; }
+};
+
+$('#dailyBing').onclick = async () => {
+  try {
+    state = await api('api/daily/bing', {});
+    toast('已恢复 Bing');
+    render();
+  } catch (e) { toast('切换失败'); }
+};
 
 $('#file').onchange = async e => {
   const files = [...e.target.files]; if (!files.length) return;

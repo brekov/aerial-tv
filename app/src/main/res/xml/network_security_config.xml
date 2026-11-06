@@ -10,6 +10,9 @@
      The weather and location services use Let's Encrypt, whose root older TVs do not trust; they
      serve the same over HTTP, and Weather falls back to that. -->
 <network-security-config>
+    <!-- Custom build: the daily source is a LAN server over plain HTTP; DailySource restricts
+         the URL to a private IPv4 or .local host on port 8899. -->
+    <base-config cleartextTrafficPermitted="true" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">sylvan.apple.com</domain>
         <trust-anchors>

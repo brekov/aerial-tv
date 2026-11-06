@@ -16,10 +16,14 @@ android {
         // Android 5.0. Compose 1.10 and later need 6.0, so the Compose BOM below stays on 1.9.
         minSdk = 21
         targetSdk = 34
-        versionCode = 38
-        versionName = "1.36"
+        versionCode = 39
+        versionName = "1.36-custom"
         // `./gradlew -Pdiag ...`: a build for one reporter's TV whose logcat shows no app lines;
         // see system/DiagLog.kt.
+        // Custom build: daily source may point at a LAN server; the token is shared with it.
+        val dailyToken = (project.findProperty("dailyToken") as String?) ?: "MISSING"
+        buildConfigField("String", "DAILY_TOKEN", "\"$dailyToken\"")
+        buildConfigField("boolean", "DISABLE_UPDATE_CHECK", "true")
         val diag = project.hasProperty("diag")
         buildConfigField("boolean", "DIAG", diag.toString())
         if (diag) versionNameSuffix = "-diag"
