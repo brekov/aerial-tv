@@ -228,8 +228,12 @@ def material_public_dict(
 
 
 def admin_material_dict(settings: Settings, material: dict[str, Any]) -> dict[str, Any]:
+    # Admin pages can be opened under any LAN name (192.168.x.x, mDNS, ...). Relative URLs keep
+    # the admin cookie on the same origin as the page; TV question URLs still use PUBLIC_BASE_URL.
+    public = material_public_dict(settings, material)
+    public["url"] = f"/api/v1/images/{material['sha256']}"
     return {
-        **material_public_dict(settings, material),
+        **public,
         "status": material["status"],
         "meta": material.get("meta_json", "{}"),
     }

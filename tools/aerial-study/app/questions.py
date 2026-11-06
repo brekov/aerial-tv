@@ -9,7 +9,7 @@ from typing import Any
 
 from .config import Settings
 from .db import read_session, session
-from .materials import get_image_material, material_public_dict
+from .materials import admin_material_dict, get_image_material, material_public_dict
 from .providers import judge_answer_ai
 from .util import (
     iso,
@@ -471,7 +471,7 @@ def question_admin_dict(settings: Settings, question: dict[str, Any]) -> dict[st
         "prompt": question["prompt"],
         "answer": question["answer"],
         "imageId": question.get("image_id"),
-        "image": material_public_dict(settings, image) if image else None,
+        "image": admin_material_dict(settings, image) if image else None,
         "options": safe_json_loads(question.get("options_json"), []),
         "explanation": question["explanation"],
         "difficulty": question["difficulty"],
