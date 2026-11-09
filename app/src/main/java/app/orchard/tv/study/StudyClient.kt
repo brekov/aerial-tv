@@ -41,11 +41,12 @@ object StudyClient {
         val questions = json.getJSONArray("questions")
         return Session(session, (0 until questions.length()).map { i ->
             val q = questions.getJSONObject(i)
-            val prompt = q.optJSONObject("prompt")
-            val image = prompt?.optString("imageUrl")?.takeIf { it.isNotBlank() }?.let {
+            val promptObj = q.optJSONObject("prompt")
+            val promptText = promptObj?.optString("text") ?: q.optString("prompt").takeIf { it.isNotBlank() }
+            val image = promptObj?.optString("imageUrl")?.takeIf { it.isNotBlank() }?.let {
                 if (it.startsWith("http")) it else base() + it
             }
-            Question(q.getLong("id"), q.optString("type", "word_image"), q.optString("imageUrl").takeIf { it.isNotBlank() } ?: image, prompt?.optString("text"))
+            Question(q.getLong("id"), q.optString("type", "word_image"), q.optString("imageUrl").takeIf { it.isNotBlank() } ?: image, promptText)
         })
     }
 
