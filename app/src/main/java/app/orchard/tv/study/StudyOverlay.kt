@@ -103,20 +103,27 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             isFocusableInTouchMode = true
             setOnKeyListener { _, keyCode, _ -> keyCode != KeyEvent.KEYCODE_POWER }
         }
-        val column = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(72, 40, 72, 40)
+        // The card is the exercise: give it the whole screen, not a small box between chrome.
+        // Text sits in a translucent strip at the top so the lower part of the card (often where
+        // the big target word is printed) stays visible.
+        image = ImageView(service).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
         }
-        title = text(38f, Color.WHITE, Typeface.BOLD).apply { text = service.getString(R.string.study_title) }
-        progress = text(24f, Color.LTGRAY, Typeface.NORMAL)
-        image = ImageView(service).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
-        status = text(28f, Color.WHITE, Typeface.NORMAL).apply { gravity = Gravity.CENTER }
-        column.addView(title)
-        column.addView(progress, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 14 })
-        column.addView(image, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = 24; bottomMargin = 18 })
-        column.addView(status)
-        root.addView(column, FrameLayout.LayoutParams(-1, -1))
+        root.addView(image, FrameLayout.LayoutParams(-1, -1))
+        val header = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+            setPadding(56, 24, 56, 22)
+            setBackgroundColor(Color.rgb(18, 18, 22))
+        }
+        title = text(36f, Color.WHITE, Typeface.BOLD).apply { text = service.getString(R.string.study_title) }
+        progress = text(23f, Color.LTGRAY, Typeface.NORMAL)
+        status = text(27f, Color.WHITE, Typeface.NORMAL).apply { gravity = Gravity.START }
+        header.addView(title)
+        header.addView(progress, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 10 })
+        header.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 8 })
+        root.addView(header, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
