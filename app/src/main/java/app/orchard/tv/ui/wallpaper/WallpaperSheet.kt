@@ -140,6 +140,7 @@ fun WallpaperSheet(
     var phoneUrl by remember { mutableStateOf<String?>(null) }
     var qr by remember { mutableStateOf<ImageBitmap?>(null) }
     var showDaily by remember { mutableStateOf(false) }
+    var showMimo by remember { mutableStateOf(false) }
 
     BackHandler(enabled = visible, onBack = onDismiss)
 
@@ -223,13 +224,29 @@ fun WallpaperSheet(
                             studyEnabled = on
                             StudySettings.enabled = on
                             if (on) {
-                                // The TV switch is the normal 6-minute mode; ADB can still change it.
-                                StudySettings.intervalMinutes = 6
                                 StudyWatch.start(context)
                             } else {
                                 StudyOverlay.dismiss()
                             }
                         }
+                    }
+                    val durations = listOf(3, 6, 10, 15, 20, 30)
+                    Choices(
+                        R.string.study_duration,
+                        stringResource(R.string.study_duration_hint),
+                        note,
+                        durations.map { it to stringResource(R.string.study_duration_value, it) },
+                        StudySettings.intervalMinutes,
+                        { minutes ->
+                            StudySettings.intervalMinutes = minutes
+                            StudySettings.resetWatch()
+                        },
+                    )
+                    SettingRow(R.string.study_mimo, stringResource(R.string.study_mimo_hint), note) {
+                        ActionChip(
+                            if (StudySettings.mimoConfigured) stringResource(R.string.study_mimo_set) else stringResource(R.string.study_mimo_unset),
+                            Glyph.Gear,
+                        ) { showMimo = true }
                     }
                 }
 
@@ -437,6 +454,14 @@ fun WallpaperSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 DailySourceDialog(onClose = { showDaily = false })
+            }
+        }
+        if (showMimo) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).dismissOnTap { showMimo = false },
+                contentAlignment = Alignment.Center,
+            ) {
+                StudyMimoDialog(onClose = { showMimo = false })
             }
         }
     }

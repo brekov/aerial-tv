@@ -300,7 +300,7 @@
     <string name="kids_blocked">«%s» тут недоступний</string>
     <string name="kids_warn">Лишилося %d хв</string>
     <string name="kids_warn_break">Перерва за %d хв</string>
-    <string name="study_title">Дивись і навчайся</string>
+    <string name="study_title">Навчальний квест</string>
     <string name="study_loading">Завантаження запитань…</string>
     <string name="study_listening">Скажіть відповідь</string>
     <string name="study_recognizing">Розпізнавання…</string>
@@ -310,9 +310,9 @@
     <string name="study_error">Сервіс навчання недоступний</string>
     <string name="study_no_speech">Не почув; скажіть ще раз</string>
     <string name="study_question">Запитання %1$d з %2$d</string>
-    <string name="study_section">Навчальний режим</string>
-    <string name="study_switch">Ліміт перегляду</string>
-    <string name="study_switch_hint">Після 6 хвилин перегляду потрібно відповісти на 5 запитань за картинками; усі п’ять відкривають продовження.</string>
+    <string name="study_section">Навчальний квест</string>
+    <string name="study_switch">Відповідь для доступу</string>
+    <string name="study_switch_hint">Після заданого часу перегляду дайте відповіді на п’ять запитань за картинками, щоб продовжити.</string>
     <string name="study_on">Увімк.</string>
     <string name="study_off">Вимк.</string>
     <string name="study_voice_right">Правильно</string>
@@ -320,4 +320,16 @@
     <string name="study_voice_no_speech">Я не почув, повторіть</string>
     <string name="study_voice_error">Навчальний сервіс тимчасово недоступний</string>
     <string name="study_voice_passed">Усе правильно, можна продовжувати</string>
+    <string name="study_duration">Час перегляду</string>
+    <string name="study_duration_hint">Через скільки хвилин запускати запитання (типово 6 хвилин).</string>
+    <string name="study_duration_value">%1$d хв</string>
+    <string name="study_mimo">Ключ MiMo</string>
+    <string name="study_mimo_hint">Використовувати MiMo для розпізнавання мовлення та підказок без NAS.</string>
+    <string name="study_mimo_set">Налаштовано</string>
+    <string name="study_mimo_unset">Не налаштовано</string>
+    <string name="study_mimo_title">Ключ MiMo</string>
+    <string name="study_mimo_field">API-ключ</string>
+    <string name="study_mimo_saved">Збережено</string>
+    <string name="study_mimo_clear">Очистити</string>
+    <string name="study_mimo_cancel">Скасувати</string>
 </resources>

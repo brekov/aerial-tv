@@ -330,7 +330,7 @@
     <string name="ds_unreachable">服务器不可达，或 Token 不正确。</string>
     <string name="ds_probe_failed">未找到局域网图源。</string>
     <string name="ds_bing_now">已恢复 Bing。</string>
-    <string name="study_title">观看学习</string>
+    <string name="study_title">学习闯关</string>
     <string name="study_loading">正在加载题目…</string>
     <string name="study_listening">请说出答案</string>
     <string name="study_recognizing">识别中…</string>
@@ -340,9 +340,9 @@
     <string name="study_error">学习服务不可用</string>
     <string name="study_no_speech">没有听清，请再说一次</string>
     <string name="study_question">第 %1$d / %2$d 题</string>
-    <string name="study_section">观看学习</string>
-    <string name="study_switch">观看限制</string>
-    <string name="study_switch_hint">观看 6 分钟后弹出 5 道看图识字题，全部答对才能继续观看。</string>
+    <string name="study_section">学习闯关</string>
+    <string name="study_switch">答题解锁</string>
+    <string name="study_switch_hint">观看设定时间后弹出 5 道看图识字题，全部答对才能继续观看。</string>
     <string name="study_on">已开启</string>
     <string name="study_off">已关闭</string>
     <string name="study_voice_right">答对了</string>
@@ -350,4 +350,16 @@
     <string name="study_voice_no_speech">没有听清，请再说一次</string>
     <string name="study_voice_error">学习服务暂时不可用</string>
     <string name="study_voice_passed">全部答对，可以继续观看</string>
+    <string name="study_duration">播放时长</string>
+    <string name="study_duration_hint">观看多久后弹出答题（默认 6 分钟）。</string>
+    <string name="study_duration_value">%1$d 分</string>
+    <string name="study_mimo">MiMo Key</string>
+    <string name="study_mimo_hint">配置后语音识别和语音提醒直连 MiMo，不经过 NAS。</string>
+    <string name="study_mimo_set">已配置</string>
+    <string name="study_mimo_unset">未配置</string>
+    <string name="study_mimo_title">MiMo Key</string>
+    <string name="study_mimo_field">API Key</string>
+    <string name="study_mimo_saved">已保存</string>
+    <string name="study_mimo_clear">清除</string>
+    <string name="study_mimo_cancel">取消</string>
 </resources>

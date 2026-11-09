@@ -300,7 +300,7 @@
     <string name="kids_blocked">«%s» здесь недоступно</string>
     <string name="kids_warn">Осталось %d мин</string>
     <string name="kids_warn_break">Перерыв через %d мин</string>
-    <string name="study_title">Смотри и учись</string>
+    <string name="study_title">Учебный квест</string>
     <string name="study_loading">Загрузка вопросов…</string>
     <string name="study_listening">Скажите ответ</string>
     <string name="study_recognizing">Распознавание…</string>
@@ -310,9 +310,9 @@
     <string name="study_error">Сервис обучения недоступен</string>
     <string name="study_no_speech">Не расслышал; скажите ещё раз</string>
     <string name="study_question">Вопрос %1$d из %2$d</string>
-    <string name="study_section">Учебный режим</string>
-    <string name="study_switch">Лимит просмотра</string>
-    <string name="study_switch_hint">После 6 минут просмотра нужно ответить на 5 вопросов по картинкам; все пять открывают продолжение.</string>
+    <string name="study_section">Учебный квест</string>
+    <string name="study_switch">Ответ для доступа</string>
+    <string name="study_switch_hint">После заданного времени просмотра ответьте на пять вопросов по картинкам, чтобы продолжить.</string>
     <string name="study_on">Вкл.</string>
     <string name="study_off">Выкл.</string>
     <string name="study_voice_right">Верно</string>
@@ -320,4 +320,16 @@
     <string name="study_voice_no_speech">Я не расслышал, повторите</string>
     <string name="study_voice_error">Учебный сервис временно недоступен</string>
     <string name="study_voice_passed">Всё верно, можно продолжать</string>
+    <string name="study_duration">Время просмотра</string>
+    <string name="study_duration_hint">Через сколько минут запускать вопросы (по умолчанию 6 минут).</string>
+    <string name="study_duration_value">%1$d мин</string>
+    <string name="study_mimo">Ключ MiMo</string>
+    <string name="study_mimo_hint">Использовать MiMo для распознавания речи и подсказок без NAS.</string>
+    <string name="study_mimo_set">Настроен</string>
+    <string name="study_mimo_unset">Не настроен</string>
+    <string name="study_mimo_title">Ключ MiMo</string>
+    <string name="study_mimo_field">API-ключ</string>
+    <string name="study_mimo_saved">Сохранено</string>
+    <string name="study_mimo_clear">Очистить</string>
+    <string name="study_mimo_cancel">Отмена</string>
 </resources>

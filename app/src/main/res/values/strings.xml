@@ -331,7 +331,7 @@
     <string name="ds_unreachable">Server unreachable, or the token is wrong.</string>
     <string name="ds_probe_failed">No LAN daily server found.</string>
     <string name="ds_bing_now">Bing restored.</string>
-    <string name="study_title">Watch and learn</string>
+    <string name="study_title">Learning Quest</string>
     <string name="study_loading">Loading questions…</string>
     <string name="study_listening">Say the answer</string>
     <string name="study_recognizing">Recognising…</string>
@@ -341,9 +341,9 @@
     <string name="study_error">Study service is not available</string>
     <string name="study_no_speech">I did not hear you; please say it again</string>
     <string name="study_question">Question %1$d of %2$d</string>
-    <string name="study_section">Study Guard</string>
-    <string name="study_switch">Watch limit</string>
-    <string name="study_switch_hint">After 6 minutes of watching, answer five picture-word questions. All five unlock more watching.</string>
+    <string name="study_section">Learning Quest</string>
+    <string name="study_switch">Answer to unlock</string>
+    <string name="study_switch_hint">After the set watch time, answer five picture-word questions to keep watching.</string>
     <string name="study_on">On</string>
     <string name="study_off">Off</string>
     <string name="study_voice_right">Correct</string>
@@ -351,4 +351,16 @@
     <string name="study_voice_no_speech">I did not hear you, please say it again</string>
     <string name="study_voice_error">Study service is temporarily unavailable</string>
     <string name="study_voice_passed">All correct, you may keep watching</string>
+    <string name="study_duration">Watch time</string>
+    <string name="study_duration_hint">How long before the quiz (default 6 minutes).</string>
+    <string name="study_duration_value">%1$d min</string>
+    <string name="study_mimo">MiMo key</string>
+    <string name="study_mimo_hint">Use MiMo for speech recognition and reminders, without the NAS.</string>
+    <string name="study_mimo_set">Configured</string>
+    <string name="study_mimo_unset">Not configured</string>
+    <string name="study_mimo_title">MiMo key</string>
+    <string name="study_mimo_field">API key</string>
+    <string name="study_mimo_saved">Saved</string>
+    <string name="study_mimo_clear">Clear</string>
+    <string name="study_mimo_cancel">Cancel</string>
 </resources>

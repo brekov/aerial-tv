@@ -300,7 +300,7 @@
     <string name="kids_blocked">«%s» мұнда қолжетімсіз</string>
     <string name="kids_warn">%d мин қалды</string>
     <string name="kids_warn_break">%d минуттан кейін үзіліс</string>
-    <string name="study_title">Көр және үйрен</string>
+    <string name="study_title">Оқу квесті</string>
     <string name="study_loading">Сұрақтар жүктелуде…</string>
     <string name="study_listening">Жауапты айтыңыз</string>
     <string name="study_recognizing">Танылуда…</string>
@@ -310,9 +310,9 @@
     <string name="study_error">Оқу қызметі қолжетімсіз</string>
     <string name="study_no_speech">Естілмеді; қайта айтыңыз</string>
     <string name="study_question">%1$d / %2$d сұрақ</string>
-    <string name="study_section">Оқу режимі</string>
-    <string name="study_switch">Қарау шектеуі</string>
-    <string name="study_switch_hint">6 минут қарағаннан кейін сурет бойынша 5 сұраққа жауап беру керек; барлығы дұрыс болса ғана қарауды жалғастыруға болады.</string>
+    <string name="study_section">Оқу квесті</string>
+    <string name="study_switch">Қол жеткізу үшін жауап</string>
+    <string name="study_switch_hint">Белгіленген қарау уақытынан кейін қарауды жалғастыру үшін сурет бойынша бес сұраққа жауап беріңіз.</string>
     <string name="study_on">Қосулы</string>
     <string name="study_off">Өшірулі</string>
     <string name="study_voice_right">Дұрыс</string>
@@ -320,4 +320,16 @@
     <string name="study_voice_no_speech">Естілмеді, қайталаңыз</string>
     <string name="study_voice_error">Оқу қызметі уақытша қолжетімсіз</string>
     <string name="study_voice_passed">Барлығы дұрыс, қарауды жалғастыруға болады</string>
+    <string name="study_duration">Қарау уақыты</string>
+    <string name="study_duration_hint">Сұрақтар қанша минуттан кейін шығады (әдепкі 6 минут).</string>
+    <string name="study_duration_value">%1$d мин</string>
+    <string name="study_mimo">MiMo кілті</string>
+    <string name="study_mimo_hint">MiMo арқылы сөйлеуді тану және еске салу, NAS-сыз.</string>
+    <string name="study_mimo_set">Бапталған</string>
+    <string name="study_mimo_unset">Бапталмаған</string>
+    <string name="study_mimo_title">MiMo кілті</string>
+    <string name="study_mimo_field">API кілті</string>
+    <string name="study_mimo_saved">Сақталды</string>
+    <string name="study_mimo_clear">Тазалау</string>
+    <string name="study_mimo_cancel">Болдырмау</string>
 </resources>
