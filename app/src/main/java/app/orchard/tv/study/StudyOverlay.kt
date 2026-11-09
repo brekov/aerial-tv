@@ -1,6 +1,7 @@
 package app.orchard.tv.study
 
 import android.content.ComponentName
+import android.content.res.ColorStateList
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -21,6 +22,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import app.orchard.tv.R
 import app.orchard.tv.guard.HomeGuardService
@@ -67,7 +69,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var root: FrameLayout
     private lateinit var image: ImageView
     private lateinit var title: TextView
-    private lateinit var progress: TextView
+    private lateinit var progress: ProgressBar
     private lateinit var status: TextView
     private var speech: SpeechRecognizer? = null
     private var session: StudyClient.Session? = null
@@ -103,27 +105,41 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             isFocusableInTouchMode = true
             setOnKeyListener { _, keyCode, _ -> keyCode != KeyEvent.KEYCODE_POWER }
         }
-        // The card is the exercise: give it the whole screen, not a small box between chrome.
-        // Text sits in a translucent strip at the top so the lower part of the card (often where
-        // the big target word is printed) stays visible.
+        // The card is the exercise. The top strip owns its own space instead of covering the
+        // image; below it the image gets all remaining width and height.
+        val column = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        val header = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+            setPadding(48, 14, 48, 12)
+            setBackgroundColor(Color.rgb(18, 18, 22))
+        }
+        title = text(22f, Color.WHITE, Typeface.BOLD).apply { text = service.getString(R.string.study_title) }
+        val density = service.resources.displayMetrics.density
+        progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = false
+            max = StudySettings.QUESTIONS
+            progressTintList = ColorStateList.valueOf(Color.rgb(92, 164, 255))
+            progressBackgroundTintList = ColorStateList.valueOf(Color.rgb(49, 54, 66))
+            minimumHeight = (3 * density).toInt().coerceAtLeast(2)
+        }
+        status = text(17f, Color.LTGRAY, Typeface.NORMAL).apply {
+            gravity = Gravity.START
+            visibility = View.GONE
+        }
+        header.addView(title)
+        header.addView(progress, LinearLayout.LayoutParams(-1, (3 * density).toInt().coerceAtLeast(2)).apply { topMargin = 10 })
+        header.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 6 })
+        column.addView(header, LinearLayout.LayoutParams(-1, -2))
         image = ImageView(service).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.BLACK)
         }
-        root.addView(image, FrameLayout.LayoutParams(-1, -1))
-        val header = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.START
-            setPadding(56, 24, 56, 22)
-            setBackgroundColor(Color.rgb(18, 18, 22))
-        }
-        title = text(36f, Color.WHITE, Typeface.BOLD).apply { text = service.getString(R.string.study_title) }
-        progress = text(23f, Color.LTGRAY, Typeface.NORMAL)
-        status = text(27f, Color.WHITE, Typeface.NORMAL).apply { gravity = Gravity.START }
-        header.addView(title)
-        header.addView(progress, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 10 })
-        header.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 8 })
-        root.addView(header, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        column.addView(image, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(column, FrameLayout.LayoutParams(-1, -1))
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -160,6 +176,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     attempt = 0
                     if (s.questions.isEmpty()) {
                         status.text = service.getString(R.string.study_error)
+                        status.visibility = View.VISIBLE
                         retryLater()
                     } else {
                         showQuestion()
@@ -167,6 +184,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 }.onFailure {
                     Log.w(TAG, "study session failed", it)
                     status.text = service.getString(R.string.study_error)
+                    status.visibility = View.VISIBLE
                     retryLater()
                 }
             }
@@ -176,8 +194,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private fun showQuestion() {
         val s = session ?: return
         val q = s.questions.getOrNull(index) ?: return finish(false)
-        progress.text = service.getString(R.string.study_question, index + 1, s.questions.size)
-        status.text = service.getString(R.string.study_listening)
+        progress.max = s.questions.size
+        progress.progress = index + 1
+        status.visibility = View.GONE
         image.setImageBitmap(null)
         if (q.text != null) title.text = q.text else title.text = service.getString(R.string.study_title)
         if (q.imageUrl != null) io.execute {
@@ -200,6 +219,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         speech = recognizer
         listening = true
+        status.visibility = View.GONE
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: android.os.Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -241,6 +261,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         val s = session ?: return
         val q = s.questions.getOrNull(index) ?: return
         status.text = service.getString(R.string.study_recognizing)
+        status.visibility = View.GONE
         main.removeCallbacks(timeout)
         io.execute {
             val answer = runCatching { StudyClient.answer(s.id, q.id, transcript) }
@@ -249,21 +270,25 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 answer.onSuccess { a ->
                     if (a.restart || !a.correct) {
                         status.text = service.getString(R.string.study_wrong)
+                        status.visibility = View.VISIBLE
                         main.postDelayed({ if (!closed) startSession() }, 2_000)
                         return@post
                     }
                     index = a.progress
                     if (a.finished || index >= s.questions.size) {
                         status.text = service.getString(R.string.study_passed)
+                        status.visibility = View.VISIBLE
                         main.removeCallbacks(timeout)
                         main.postDelayed(pass, 1_500)
                     } else {
                         status.text = service.getString(R.string.study_right)
+                        status.visibility = View.VISIBLE
                         main.postDelayed({ if (!closed) showQuestion() }, 600)
                     }
                 }.onFailure {
                     Log.w(TAG, "answer failed", it)
                     status.text = service.getString(R.string.study_error)
+                    status.visibility = View.VISIBLE
                     retryLater()
                 }
             }
@@ -280,6 +305,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         } else {
             service.getString(R.string.study_error)
         }
+        status.visibility = View.VISIBLE
         if (attempt <= 3) main.postDelayed({ if (!closed) listen() }, 900)
         else retryLater()
     }
