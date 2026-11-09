@@ -16,11 +16,20 @@ object StudySettings {
     private const val KEY_TOKEN = "token"
     private const val KEY_INTERVAL = "interval_min"
     private const val KEY_WATCH_MS = "watch_ms"
+    private const val KEY_MIMO_KEY = "mimo_key"
+    private const val KEY_MIMO_BASE = "mimo_base"
+    private const val KEY_MIMO_ASR_MODEL = "mimo_asr_model"
+    private const val KEY_MIMO_TTS_MODEL = "mimo_tts_model"
+    private const val KEY_MIMO_VOICE = "mimo_voice"
 
     /** No server address is assumed; set one before enabling. */
     const val DEFAULT_URL = "http://saboop.local:8900"
     const val DEFAULT_INTERVAL_MIN = 6
     const val QUESTIONS = 5
+    const val DEFAULT_MIMO_BASE = "https://api.xiaomimimo.com/v1"
+    const val DEFAULT_MIMO_ASR_MODEL = "mimo-v2.5-asr"
+    const val DEFAULT_MIMO_TTS_MODEL = "mimo-v2.5-tts"
+    const val DEFAULT_MIMO_VOICE = "mimo_default"
 
     private var started = false
     private lateinit var app: Context
@@ -53,6 +62,29 @@ object StudySettings {
         get() = prefs().getLong(KEY_WATCH_MS, 0L)
         set(value) = prefs().edit { putLong(KEY_WATCH_MS, value.coerceAtLeast(0L)) }
 
+    /** MiMo cloud ASR/TTS are used when this is set; otherwise ASR falls back to NAS and TTS to Android. */
+    var mimoApiKey: String
+        get() = prefs().getString(KEY_MIMO_KEY, "").orEmpty()
+        set(value) = prefs().edit { putString(KEY_MIMO_KEY, value.trim()) }
+
+    var mimoBaseUrl: String
+        get() = prefs().getString(KEY_MIMO_BASE, DEFAULT_MIMO_BASE).orEmpty().trimEnd('/')
+        set(value) = prefs().edit { putString(KEY_MIMO_BASE, value.trim().trimEnd('/')) }
+
+    var mimoAsrModel: String
+        get() = prefs().getString(KEY_MIMO_ASR_MODEL, DEFAULT_MIMO_ASR_MODEL).orEmpty()
+        set(value) = prefs().edit { putString(KEY_MIMO_ASR_MODEL, value.trim()) }
+
+    var mimoTtsModel: String
+        get() = prefs().getString(KEY_MIMO_TTS_MODEL, DEFAULT_MIMO_TTS_MODEL).orEmpty()
+        set(value) = prefs().edit { putString(KEY_MIMO_TTS_MODEL, value.trim()) }
+
+    var mimoVoice: String
+        get() = prefs().getString(KEY_MIMO_VOICE, DEFAULT_MIMO_VOICE).orEmpty()
+        set(value) = prefs().edit { putString(KEY_MIMO_VOICE, value.trim()) }
+
+    val mimoConfigured: Boolean get() = mimoApiKey.isNotBlank()
+
     val intervalMs: Long get() = intervalMinutes * 60_000L
 
     fun resetWatch() {
@@ -64,5 +96,5 @@ object StudySettings {
     }
 
     fun diagnostic(): String =
-        "Study enabled=$enabled url=$baseUrl interval=${intervalMinutes}m watch=${watchMs / 1000}s"
+        "Study enabled=$enabled url=$baseUrl interval=${intervalMinutes}m watch=${watchMs / 1000}s mimo=${if (mimoConfigured) "on" else "off"}"
 }

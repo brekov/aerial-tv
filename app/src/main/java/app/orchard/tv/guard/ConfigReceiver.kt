@@ -48,6 +48,9 @@ import kotlinx.coroutines.launch
  *   ... --ez study_enabled true --es study_url http://saboop.local:8900
  *       --es study_token <device token> --ei study_interval_min 6
  *   ... --ez study_test true       (show the study overlay now, for trying it)
+ *   ... --es mimo_key <key> --es mimo_base https://api.xiaomimimo.com/v1
+ *       --es mimo_voice mimo_default
+ *                                   (MiMo-V2.5 ASR/TTS key stored on the TV; optional)
  *
  * The manifest requires the sender to hold WRITE_SECURE_SETTINGS, which the ADB shell has and
  * ordinary apps cannot get, so no other app on the TV can flip these.
@@ -61,12 +64,19 @@ class ConfigReceiver : BroadcastReceiver() {
         }
         if (intent.hasExtra("study_enabled") || intent.hasExtra("study_url") ||
             intent.hasExtra("study_token") || intent.hasExtra("study_interval_min") ||
-            intent.getBooleanExtra("study_test", false)
+            intent.hasExtra("mimo_key") || intent.hasExtra("mimo_base") ||
+            intent.hasExtra("mimo_asr_model") || intent.hasExtra("mimo_tts_model") ||
+            intent.hasExtra("mimo_voice") || intent.getBooleanExtra("study_test", false)
         ) {
             StudySettings.init(context)
             if (intent.hasExtra("study_enabled")) StudySettings.enabled = intent.getBooleanExtra("study_enabled", false)
             intent.getStringExtra("study_url")?.let { StudySettings.baseUrl = it }
             intent.getStringExtra("study_token")?.let { StudySettings.deviceToken = it }
+            intent.getStringExtra("mimo_key")?.let { StudySettings.mimoApiKey = it }
+            intent.getStringExtra("mimo_base")?.let { StudySettings.mimoBaseUrl = it }
+            intent.getStringExtra("mimo_asr_model")?.let { StudySettings.mimoAsrModel = it }
+            intent.getStringExtra("mimo_tts_model")?.let { StudySettings.mimoTtsModel = it }
+            intent.getStringExtra("mimo_voice")?.let { StudySettings.mimoVoice = it }
             if (intent.hasExtra("study_interval_min")) StudySettings.intervalMinutes = intent.getIntExtra("study_interval_min", 6)
             StudyWatch.start(context)
             if (!StudySettings.enabled) StudyOverlay.dismiss()

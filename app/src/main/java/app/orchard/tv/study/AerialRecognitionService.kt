@@ -23,8 +23,9 @@ import kotlin.math.sqrt
  * private, so Aerial resolves its own RecognitionService explicitly (StudyOverlay). The service is
  * also exported as a standard component for other clients.
  *
- * Audio is captured at 16 kHz mono with a small adaptive-energy VAD; the utterance is sent to
- * NAS /api/v1/asr. No audio is stored.
+ * Audio is captured at 16 kHz mono with a small adaptive-energy VAD. With a MiMo key configured
+ * the utterance goes directly from the TV to MiMo-V2.5-ASR; otherwise it falls back to the LAN
+ * /api/v1/asr service. No audio is stored.
  */
 class AerialRecognitionService : RecognitionService() {
     companion object {
@@ -144,7 +145,11 @@ class AerialRecognitionService : RecognitionService() {
             if (!started || speechFrames < 30) return fail(listener, "too short")
             main.post { listener.endOfSpeech() }
             val wav = wav(utterance.toByteArray())
-            val text = runCatching { StudyClient.transcribe(wav) }.getOrElse {
+            val text = (if (StudySettings.mimoConfigured) {
+                runCatching { MimoClient.transcribe(wav) }
+            } else {
+                runCatching { StudyClient.transcribe(wav) }
+            }).getOrElse {
                 Log.w(TAG, "ASR failed", it)
                 return fail(listener, "ASR unavailable")
             }

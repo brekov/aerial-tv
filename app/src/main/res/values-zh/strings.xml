@@ -345,4 +345,9 @@
     <string name="study_switch_hint">观看 6 分钟后弹出 5 道看图识字题，全部答对才能继续观看。</string>
     <string name="study_on">已开启</string>
     <string name="study_off">已关闭</string>
+    <string name="study_voice_right">答对了</string>
+    <string name="study_voice_wrong">答错了，重新开始</string>
+    <string name="study_voice_no_speech">没有听清，请再说一次</string>
+    <string name="study_voice_error">学习服务暂时不可用</string>
+    <string name="study_voice_passed">全部答对，可以继续观看</string>
 </resources>

@@ -315,4 +315,9 @@
     <string name="study_switch_hint">Після 6 хвилин перегляду потрібно відповісти на 5 запитань за картинками; усі п’ять відкривають продовження.</string>
     <string name="study_on">Увімк.</string>
     <string name="study_off">Вимк.</string>
+    <string name="study_voice_right">Правильно</string>
+    <string name="study_voice_wrong">Неправильно, починаємо знову</string>
+    <string name="study_voice_no_speech">Я не почув, повторіть</string>
+    <string name="study_voice_error">Навчальний сервіс тимчасово недоступний</string>
+    <string name="study_voice_passed">Усе правильно, можна продовжувати</string>
 </resources>

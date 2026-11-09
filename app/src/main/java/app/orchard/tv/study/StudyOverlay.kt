@@ -175,17 +175,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     index = 0
                     attempt = 0
                     if (s.questions.isEmpty()) {
-                        status.text = service.getString(R.string.study_error)
-                        status.visibility = View.VISIBLE
-                        retryLater()
+                        announce(R.string.study_voice_error) { retryLater() }
                     } else {
                         showQuestion()
                     }
                 }.onFailure {
                     Log.w(TAG, "study session failed", it)
-                    status.text = service.getString(R.string.study_error)
-                    status.visibility = View.VISIBLE
-                    retryLater()
+                    announce(R.string.study_voice_error) { retryLater() }
                 }
             }
         }
@@ -269,29 +265,35 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 if (closed) return@post
                 answer.onSuccess { a ->
                     if (a.restart || !a.correct) {
-                        status.text = service.getString(R.string.study_wrong)
-                        status.visibility = View.VISIBLE
-                        main.postDelayed({ if (!closed) startSession() }, 2_000)
+                        announce(R.string.study_voice_wrong) {
+                            main.postDelayed({ if (!closed) startSession() }, 500)
+                        }
                         return@post
                     }
                     index = a.progress
                     if (a.finished || index >= s.questions.size) {
-                        status.text = service.getString(R.string.study_passed)
-                        status.visibility = View.VISIBLE
                         main.removeCallbacks(timeout)
-                        main.postDelayed(pass, 1_500)
+                        announce(R.string.study_voice_passed) { main.postDelayed(pass, 600) }
                     } else {
-                        status.text = service.getString(R.string.study_right)
-                        status.visibility = View.VISIBLE
-                        main.postDelayed({ if (!closed) showQuestion() }, 600)
+                        announce(R.string.study_voice_right) {
+                            main.postDelayed({ if (!closed) showQuestion() }, 300)
+                        }
                     }
                 }.onFailure {
                     Log.w(TAG, "answer failed", it)
-                    status.text = service.getString(R.string.study_error)
-                    status.visibility = View.VISIBLE
-                    retryLater()
+                    announce(R.string.study_voice_error) { retryLater() }
                 }
             }
+        }
+    }
+
+    /** Show text and speak the same reminder; only continue after the voice has finished. */
+    private fun announce(res: Int, then: (() -> Unit)? = null) {
+        val text = service.getString(res)
+        status.text = text
+        status.visibility = View.VISIBLE
+        StudyVoice.speak(service, text) {
+            main.post { if (!closed) then?.invoke() }
         }
     }
 
@@ -300,14 +302,15 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         stopSpeech()
         attempt++
         DiagLog.i("study: retry $attempt ($reason)")
-        status.text = if (reason == "no speech" || reason == "empty") {
-            service.getString(R.string.study_no_speech)
+        val voice = if (reason == "no speech" || reason == "empty") {
+            R.string.study_voice_no_speech
         } else {
-            service.getString(R.string.study_error)
+            R.string.study_voice_error
         }
-        status.visibility = View.VISIBLE
-        if (attempt <= 3) main.postDelayed({ if (!closed) listen() }, 900)
-        else retryLater()
+        announce(voice) {
+            if (attempt <= 3) main.postDelayed({ if (!closed) listen() }, 500)
+            else retryLater()
+        }
     }
 
     private fun retryLater() {
@@ -322,6 +325,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         main.removeCallbacks(timeout)
         main.removeCallbacks(pass)
         stopSpeech()
+        StudyVoice.stop()
         if (passed) StudySettings.resetWatch()
         main.post {
             remove()

@@ -315,4 +315,9 @@
     <string name="study_switch_hint">6 минут қарағаннан кейін сурет бойынша 5 сұраққа жауап беру керек; барлығы дұрыс болса ғана қарауды жалғастыруға болады.</string>
     <string name="study_on">Қосулы</string>
     <string name="study_off">Өшірулі</string>
+    <string name="study_voice_right">Дұрыс</string>
+    <string name="study_voice_wrong">Қате, қайта бастаймыз</string>
+    <string name="study_voice_no_speech">Естілмеді, қайталаңыз</string>
+    <string name="study_voice_error">Оқу қызметі уақытша қолжетімсіз</string>
+    <string name="study_voice_passed">Барлығы дұрыс, қарауды жалғастыруға болады</string>
 </resources>

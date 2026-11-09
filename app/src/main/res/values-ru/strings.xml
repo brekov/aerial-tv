@@ -315,4 +315,9 @@
     <string name="study_switch_hint">После 6 минут просмотра нужно ответить на 5 вопросов по картинкам; все пять открывают продолжение.</string>
     <string name="study_on">Вкл.</string>
     <string name="study_off">Выкл.</string>
+    <string name="study_voice_right">Верно</string>
+    <string name="study_voice_wrong">Неверно, начинаем заново</string>
+    <string name="study_voice_no_speech">Я не расслышал, повторите</string>
+    <string name="study_voice_error">Учебный сервис временно недоступен</string>
+    <string name="study_voice_passed">Всё верно, можно продолжать</string>
 </resources>

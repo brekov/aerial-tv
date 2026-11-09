@@ -346,4 +346,9 @@
     <string name="study_switch_hint">After 6 minutes of watching, answer five picture-word questions. All five unlock more watching.</string>
     <string name="study_on">On</string>
     <string name="study_off">Off</string>
+    <string name="study_voice_right">Correct</string>
+    <string name="study_voice_wrong">Wrong, starting again</string>
+    <string name="study_voice_no_speech">I did not hear you, please say it again</string>
+    <string name="study_voice_error">Study service is temporarily unavailable</string>
+    <string name="study_voice_passed">All correct, you may keep watching</string>
 </resources>
