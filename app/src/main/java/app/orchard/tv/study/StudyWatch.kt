@@ -29,6 +29,7 @@ object StudyWatch {
     private var running = false
     private var lastTickAt = 0L
     private var lastWatchingAt = 0L
+    private var cachedFront: String? = null
 
     private val loop = Runnable { tickAndPlan() }
 
@@ -90,13 +91,27 @@ object StudyWatch {
     private fun frontByUsage(ctx: Context): String? = runCatching {
         val manager = ctx.getSystemService<UsageStatsManager>() ?: return null
         val now = System.currentTimeMillis()
-        val events = manager.queryEvents(now - 60_000L, now)
         val event = UsageEvents.Event()
+
+        // A video app can stay in front for hours without emitting another MOVE_TO_FOREGROUND
+        // event. Querying only the last 60 s made the foreground look empty after the first
+        // minute (the "watch=65s after hours" bug), so fall back to the last known app and then
+        // to a longer history.
         var last: String? = null
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
+        val recent = manager.queryEvents(now - 60_000L, now)
+        while (recent.hasNextEvent()) {
+            recent.getNextEvent(event)
             if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) last = event.packageName
         }
+        if (last == null) last = cachedFront
+        if (last == null) {
+            val history = manager.queryEvents(now - 24 * 60 * 60 * 1_000L, now)
+            while (history.hasNextEvent()) {
+                history.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) last = event.packageName
+            }
+        }
+        if (last != null) cachedFront = last
         last
     }.getOrNull()
 }
