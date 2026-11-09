@@ -17,6 +17,14 @@ images and create/manage questions by hand.
 
 The admin UI is bilingual (Chinese default, English toggle) and responsive for phones/tablets.
 
+### Word-image question rule
+
+Each card is **one question**: the card already carries the prominent target word (for example a
+bear picture with **bear** printed on it). The AI is told to read only that large/central target
+word and ignore page headers, footers, page numbers, publisher marks and other small text. The TV
+shows the original image; the answer is the target word. The generation job always creates one
+draft per image (the request `count` is ignored for `word_image`).
+
 ## Architecture
 
 ```

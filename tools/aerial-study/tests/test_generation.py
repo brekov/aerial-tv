@@ -44,11 +44,12 @@ def test_generation_creates_draft_questions_only(admin_client, image_factory, mo
     assert response.status_code == 202
     job = response.json()["job"]
     assert job["status"] == "succeeded", job
-    assert len(job["questionIds"]) == 3
+    # A word-image card has exactly one target word; the API ignores count for this type.
+    assert len(job["questionIds"]) == 1
     assert job["provider"] == "deepseek"
 
     drafts = admin_client.get("/api/v1/admin/questions?status=draft").json()["items"]
-    assert len(drafts) == 3
+    assert len(drafts) == 1
     assert all(item["source"] == "ai" for item in drafts)
     assert all(item["status"] == "draft" for item in drafts)
     assert all(item["imageId"] == image["sha256"] for item in drafts)
@@ -198,3 +199,24 @@ def test_generation_async_worker_path(app, admin_client, image_factory, monkeypa
         time.sleep(0.02)
     assert latest["status"] == "succeeded", latest
     assert len(latest["questionIds"]) == 2
+
+
+def test_word_image_parser_one_object_and_aliases(monkeypatch):
+    from types import SimpleNamespace
+    from app import providers
+
+    class Config:
+        name = "deepseek"
+        model = "vision"
+        configured = True
+
+    monkeypatch.setattr(providers, "get_provider_config", lambda settings, name=None: Config())
+    monkeypatch.setattr(providers, "_chat", lambda *args, **kwargs: '{"prompt":"请读出图中醒目的词语。","answer":"bear","aliases":["bear","bears"]}')
+    questions, config = providers.generate_word_image_questions(
+        SimpleNamespace(), provider_name="deepseek", image_bytes=b"png",
+        mime_type="image/png", lang="en", count=5,
+    )
+    assert config.name == "deepseek"
+    assert len(questions) == 1
+    assert questions[0]["answer"] == "bear|bears"
+    assert questions[0]["prompt"] == "请读出图中醒目的词语。"

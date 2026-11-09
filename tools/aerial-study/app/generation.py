@@ -75,6 +75,9 @@ class GenerationService:
         except (TypeError, ValueError):
             raise GenerationError("count must be an integer", status_code=400) from None
         count = max(1, min(count, 20))
+        # A word-image card already carries exactly one target word. Generating several
+        # questions from the same card would repeat the same flashcard; keep one.
+        count = 1
 
         provider_name = (provider or "").strip().lower()
         try:

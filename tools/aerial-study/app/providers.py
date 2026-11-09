@@ -299,15 +299,23 @@ def _extract_json(text: str) -> Any:
 
 def _word_image_prompt(lang: str, count: int) -> str:
     language = "Chinese" if lang == "zh" else "English"
+    # The image is the exercise itself: it already carries one big target word. Header, footer,
+    # page numbers, publisher marks and other small text are noise and must not become the answer.
     return (
-        f"Look at the attached image and create {count} vocabulary questions "
-        f"in {language}. Each question shows this image and asks for one word "
-        "that names the main object or action in the image. Use child-friendly, "
-        "unambiguous words. Return a JSON array with exactly this shape:\n"
-        '{"prompt": "What is this?", "answer": "apple", '
-        '"explanation": "It is a red fruit.", "difficulty": 1}\n'
-        f"Return exactly {count} distinct objects. Do not use markdown. "
-        "The answer must be a single word unless the object needs two words."
+        "This is a children's vocabulary card. The card itself already contains one prominent "
+        "target word or character printed on the image, usually large, central and in a strong "
+        "colour. There may be other small text on the same image: page header, footer, page "
+        "number, publisher/brand marks or decorations. Ignore all of that other text.\n"
+        "Identify ONLY the prominent target word that the card is teaching. Do not name the "
+        "object from the picture unless that object's name is the prominent word printed on the "
+        "card. Return exactly one question as a JSON object with this shape:\n"
+        '{"prompt": "' + ("请读出图中醒目的词语。" if lang == "zh" else "Read the big word in the picture.") + '", '
+        '"answer": "bear", "aliases": ["bear", "bears"], "explanation": "The big word is bear.", '
+        '"difficulty": 1}\n'
+        f"The answer and aliases must be in {language} and must be exactly the visible target "
+        "word; aliases are optional spelling/plural variants only. Do not return markdown, "
+        "multiple questions, header/footer text, a page number, or a sentence as the answer.\n"
+        f"Return exactly 1 question in the requested language ({language})."
     )
 
 
@@ -329,7 +337,11 @@ def generate_word_image_questions(
     data = _extract_json(raw)
     items: Any = data
     if isinstance(data, dict):
-        items = data.get("questions") or data.get("items") or data.get("data")
+        # The prompt asks for one object; accept both a bare object and {"questions": [...]}.
+        if "answer" in data and "prompt" in data:
+            items = [data]
+        else:
+            items = data.get("questions") or data.get("items") or data.get("data")
     if not isinstance(items, list):
         raise ProviderError("AI reply did not contain a question list")
 
@@ -342,7 +354,13 @@ def generate_word_image_questions(
         answer = str(item.get("answer") or "").strip()
         if not prompt or not answer:
             continue
-        key = prompt.lower()
+        raw_aliases = item.get("aliases") or []
+        if isinstance(raw_aliases, str):
+            raw_aliases = [raw_aliases]
+        aliases = [str(value).strip() for value in raw_aliases if str(value).strip()]
+        # The server treats "|" in the answer as accepted alternatives.
+        answer_value = "|".join([answer] + [a for a in aliases if a != answer])
+        key = answer.lower()
         if key in seen:
             continue
         seen.add(key)
@@ -354,7 +372,7 @@ def generate_word_image_questions(
         questions.append(
             {
                 "prompt": prompt,
-                "answer": answer,
+                "answer": answer_value,
                 "explanation": str(item.get("explanation") or "").strip(),
                 "difficulty": difficulty,
             }

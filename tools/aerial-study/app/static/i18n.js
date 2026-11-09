@@ -94,6 +94,8 @@
     "Provider": "Provider",
     "Question count": "题目数量",
     "Generate drafts": "生成草稿",
+    "Word-image: one question per image. The answer is the big target word; header/footer text is ignored.":
+      "看图识字每张图片固定生成 1 题：答案是图中醒目的目标词，页眉/页脚文字会被忽略。",
     "Job": "任务",
     "Status": "状态",
     "Provider / model": "Provider / 模型",
