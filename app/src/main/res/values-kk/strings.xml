@@ -310,4 +310,9 @@
     <string name="study_error">Оқу қызметі қолжетімсіз</string>
     <string name="study_no_speech">Естілмеді; қайта айтыңыз</string>
     <string name="study_question">%1$d / %2$d сұрақ</string>
+    <string name="study_section">Оқу режимі</string>
+    <string name="study_switch">Қарау шектеуі</string>
+    <string name="study_switch_hint">6 минут қарағаннан кейін сурет бойынша 5 сұраққа жауап беру керек; барлығы дұрыс болса ғана қарауды жалғастыруға болады.</string>
+    <string name="study_on">Қосулы</string>
+    <string name="study_off">Өшірулі</string>
 </resources>

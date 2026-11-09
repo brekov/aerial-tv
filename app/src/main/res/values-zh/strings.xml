@@ -340,4 +340,9 @@
     <string name="study_error">学习服务不可用</string>
     <string name="study_no_speech">没有听清，请再说一次</string>
     <string name="study_question">第 %1$d / %2$d 题</string>
+    <string name="study_section">观看学习</string>
+    <string name="study_switch">观看限制</string>
+    <string name="study_switch_hint">观看 6 分钟后弹出 5 道看图识字题，全部答对才能继续观看。</string>
+    <string name="study_on">已开启</string>
+    <string name="study_off">已关闭</string>
 </resources>

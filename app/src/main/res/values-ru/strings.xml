@@ -310,4 +310,9 @@
     <string name="study_error">Сервис обучения недоступен</string>
     <string name="study_no_speech">Не расслышал; скажите ещё раз</string>
     <string name="study_question">Вопрос %1$d из %2$d</string>
+    <string name="study_section">Учебный режим</string>
+    <string name="study_switch">Лимит просмотра</string>
+    <string name="study_switch_hint">После 6 минут просмотра нужно ответить на 5 вопросов по картинкам; все пять открывают продолжение.</string>
+    <string name="study_on">Вкл.</string>
+    <string name="study_off">Выкл.</string>
 </resources>

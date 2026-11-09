@@ -96,6 +96,9 @@ import app.orchard.tv.ui.theme.Palette
 import app.orchard.tv.ui.theme.Type
 import app.orchard.tv.wallpaper.DailySource
 import app.orchard.tv.wallpaper.PhoneServer
+import app.orchard.tv.study.StudyOverlay
+import app.orchard.tv.study.StudySettings
+import app.orchard.tv.study.StudyWatch
 import app.orchard.tv.wallpaper.AerialFormats
 import app.orchard.tv.wallpaper.AerialQuality
 import app.orchard.tv.wallpaper.AerialSet
@@ -180,6 +183,9 @@ fun WallpaperSheet(
         ) {
             val scroll = rememberScrollState()
             val scope = rememberCoroutineScope()
+            // StudySettings is a plain persisted preference, not Compose state. Mirror it so the
+            // TV switch updates immediately after it is pressed instead of only after reopening.
+            var studyEnabled by remember { mutableStateOf(StudySettings.enabled) }
             // How Home looks, in the order you see it: the picture behind everything, how Home
             // is laid out over it, what replaces it when idle, then the weather and the PIN.
             // Settings sit in tvOS-style grouped rows; each group's note follows the focused row.
@@ -202,6 +208,28 @@ fun WallpaperSheet(
                 Group { note ->
                     SettingRow(R.string.ds_source, stringResource(R.string.ds_note), note, first = true) {
                         ActionChip(DailySource.label(context), Glyph.ChevronRight) { showDaily = true }
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+                SectionTitle(R.string.study_section)
+                Group { note ->
+                    SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
+                        ActionChip(
+                            if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
+                            if (studyEnabled) Glyph.Check else Glyph.Offline,
+                        ) {
+                            val on = !studyEnabled
+                            studyEnabled = on
+                            StudySettings.enabled = on
+                            if (on) {
+                                // The TV switch is the normal 6-minute mode; ADB can still change it.
+                                StudySettings.intervalMinutes = 6
+                                StudyWatch.start(context)
+                            } else {
+                                StudyOverlay.dismiss()
+                            }
+                        }
                     }
                 }
 
