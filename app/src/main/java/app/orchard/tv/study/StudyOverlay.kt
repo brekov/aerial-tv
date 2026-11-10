@@ -83,6 +83,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var progress: ProgressBar
     private lateinit var status: TextView
     private lateinit var cue: ImageView
+    private lateinit var leftCard: LinearLayout
     private lateinit var wave: StudyWaveView
     private lateinit var playback: StudyPlaybackView
     private lateinit var sadStar: ImageView
@@ -193,10 +194,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     )
                 }
             }
-            background.alpha = 0.70f
+            background.alpha = 0.50f
             root.addView(background, FrameLayout.LayoutParams(-1, -1))
             root.addView(View(service).apply {
-                alpha = 0.70f
+                alpha = 0.50f
                 setBackground(GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
                     intArrayOf(Color.argb(185, 9, 28, 62), Color.argb(210, 3, 10, 26)),
@@ -206,7 +207,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             root.addView(View(service).apply {
                 setBackground(GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(Color.argb(170, 9, 28, 62), Color.argb(175, 3, 10, 26)),
+                    intArrayOf(Color.argb(128, 9, 28, 62), Color.argb(132, 3, 10, 26)),
                 ))
             }, FrameLayout.LayoutParams(-1, -1))
         }
@@ -225,11 +226,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
         val content = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
         }
 
         // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
-        val left = LinearLayout(service).apply {
+        leftCard = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((28 * density).toInt(), (22 * density).toInt(), (28 * density).toInt(), (22 * density).toInt())
             background = GradientDrawable(
@@ -256,7 +258,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             setPadding(0, (6 * density).toInt(), 0, 0)
             visibility = View.INVISIBLE
         }
-        left.addView(title, LinearLayout.LayoutParams(-1, -2))
+        leftCard.addView(title, LinearLayout.LayoutParams(-1, -2))
 
         val cueSize = (84 * density).toInt()
         cue = ImageView(service).apply {
@@ -283,13 +285,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         centerBlock.addView(cueHolder, LinearLayout.LayoutParams(-1, (100 * density).toInt()))
         centerBlock.addView(status, LinearLayout.LayoutParams(-1, -2))
-        left.addView(centerBlock, LinearLayout.LayoutParams(-1, 0, 1f))
+        leftCard.addView(centerBlock, LinearLayout.LayoutParams(-1, 0, 1f))
         sadStar = ImageView(service).apply {
             setImageResource(R.drawable.study_cue_star_sad)
             visibility = View.GONE
             contentDescription = "Sad star"
         }
-        left.addView(sadStar, LinearLayout.LayoutParams((56 * density).toInt(), (56 * density).toInt()).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        leftCard.addView(sadStar, LinearLayout.LayoutParams((56 * density).toInt(), (56 * density).toInt()).apply { gravity = Gravity.CENTER_HORIZONTAL })
 
         val imageStage = FrameLayout(service).apply {
             setPadding((14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
@@ -302,10 +304,11 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         image = ImageView(service).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.TRANSPARENT)
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> syncLeftCardHeight() }
         }
         imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
 
-        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (7 * density).toInt() })
+        content.addView(leftCard, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (7 * density).toInt() })
         content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
@@ -338,6 +341,24 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         if (closed) return
         main.removeCallbacks(nextStep)
         main.postDelayed(nextStep, 1_600)
+    }
+
+    /** Match the left glass card to the actual displayed image height, including its aspect fit. */
+    private fun syncLeftCardHeight() {
+        if (!::leftCard.isInitialized || !::image.isInitialized) return
+        val drawable = image.drawable ?: return
+        val iw = drawable.intrinsicWidth
+        val ih = drawable.intrinsicHeight
+        val vw = image.width
+        val vh = image.height
+        if (iw <= 0 || ih <= 0 || vw <= 0 || vh <= 0) return
+        val scale = minOf(vw.toFloat() / iw, vh.toFloat() / ih)
+        val shownHeight = (ih * scale).toInt().coerceAtLeast(1)
+        val params = leftCard.layoutParams
+        if (params.height != shownHeight) {
+            params.height = shownHeight
+            leftCard.layoutParams = params
+        }
     }
 
     private fun text(size: Float, color: Int, style: Int) = TextView(service).apply {
@@ -439,7 +460,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         if (q.text != null) title.text = q.text else title.text = service.getString(R.string.study_title)
         if (q.imageUrl != null) io.execute {
             val bmp: Bitmap? = StudyClient.loadImage(q.imageUrl)
-            main.post { if (!closed) image.setImageBitmap(bmp) }
+            main.post {
+                if (!closed) {
+                    image.setImageBitmap(bmp)
+                    image.post { syncLeftCardHeight() }
+                }
+            }
         }
         main.removeCallbacks(timeout)
         main.postDelayed(timeout, 120_000)
