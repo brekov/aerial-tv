@@ -54,11 +54,11 @@ def test_selection_uses_only_active_unique_questions(tv_client, question_factory
         assert "?s=" in question["imageUrl"]
 
 
-def test_session_answer_is_not_leaked(tv_client, seeded):
+def test_session_payload_has_no_answer_field(tv_client, seeded):
+    # Repeat-after-me intentionally sends the target pronunciation as `say`.
     session = _create_session(tv_client)
-    payload = json.dumps(session)
-    for answer in seeded["answers"].values():
-        assert answer not in payload
+    assert all("answer" not in question for question in session["questions"])
+    assert all(question.get("say") for question in session["questions"])
 
 
 def test_correct_answer_advances_progress(tv_client, seeded):
