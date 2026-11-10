@@ -232,7 +232,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             setPadding((28 * density).toInt(), (22 * density).toInt(), (20 * density).toInt(), (22 * density).toInt())
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(220, 24, 61, 116), Color.argb(195, 8, 27, 60)),
+                intArrayOf(Color.argb(238, 40, 105, 200), Color.argb(220, 5, 20, 48)),
             ).apply {
                 cornerRadius = 30 * density
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(80, 125, 200, 255))
@@ -359,38 +359,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         main.postDelayed(nextStep, 1_600)
     }
 
-    /** Crop the printed frame and drop paper-white pixels so the subject floats on the glass. */
-    private fun prepareImage(source: Bitmap): Bitmap {
-        val insetX = (source.width * 0.06f).toInt()
-        val insetY = (source.height * 0.06f).toInt()
-        val cropped = if (insetX > 0 && insetY > 0 && source.width > insetX * 2 && source.height > insetY * 2) {
-            Bitmap.createBitmap(source, insetX, insetY, source.width - insetX * 2, source.height - insetY * 2)
-        } else {
-            source
-        }
-        return removeWhiteBackground(cropped)
-    }
-
-    /** Keep the subject but drop the paper-white card so the image floats on the glass. */
-    private fun removeWhiteBackground(source: Bitmap): Bitmap {
-        val bitmap = source.copy(Bitmap.Config.ARGB_8888, true).apply { setHasAlpha(true) }
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        for (i in pixels.indices) {
-            val color = pixels[i]
-            val r = (color shr 16) and 0xff
-            val g = (color shr 8) and 0xff
-            val b = color and 0xff
-            val min = minOf(r, g, b)
-            if (min >= 232) {
-                val alpha = ((255 - min) * 255 / (255 - 232)).coerceIn(0, 255)
-                pixels[i] = (alpha shl 24) or (color and 0x00ffffff)
-            }
-        }
-        bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-        return bitmap
-    }
-
     private fun text(size: Float, color: Int, style: Int) = TextView(service).apply {
         textSize = size
         setTextColor(color)
@@ -419,7 +387,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         if (::play.isInitialized) play.visibility = if (mode == Cue.READY) View.VISIBLE else View.GONE
         if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
-        val showWave = mode == Cue.SPEAK || mode == Cue.PROCESS
+        val showWave = mode != Cue.LISTEN && mode != Cue.CHECK && mode != Cue.CROSS
         wave.setActive(showWave)
         wave.visibility = if (showWave) View.VISIBLE else View.INVISIBLE
         cueAnimator?.cancel()
@@ -500,7 +468,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         image.setImageBitmap(null)
         if (q.text != null) title.text = q.text else title.text = service.getString(R.string.study_title)
         if (q.imageUrl != null) io.execute {
-            val bmp: Bitmap? = StudyClient.loadImage(q.imageUrl)?.let { prepareImage(it) }
+            val bmp: Bitmap? = StudyClient.loadImage(q.imageUrl)
             main.post { if (!closed) image.setImageBitmap(bmp) }
         }
         main.removeCallbacks(timeout)
