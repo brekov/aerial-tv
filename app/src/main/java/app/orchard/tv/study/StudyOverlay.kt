@@ -174,12 +174,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 }
             }
             root.addView(background, FrameLayout.LayoutParams(-1, -1))
-            root.addView(View(service).apply { setBackgroundColor(Color.argb(68, 0, 0, 0)) }, FrameLayout.LayoutParams(-1, -1))
+            root.addView(View(service).apply { setBackgroundColor(Color.argb(36, 0, 0, 0)) }, FrameLayout.LayoutParams(-1, -1))
         } else {
             root.addView(View(service).apply {
                 background = GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(Color.argb(210, 16, 19, 24), Color.argb(190, 28, 32, 38)),
+                    intArrayOf(Color.argb(205, 58, 60, 68), Color.argb(185, 42, 45, 52)),
                 )
             }, FrameLayout.LayoutParams(-1, -1))
         }
@@ -198,7 +198,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
         val content = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
+            setPadding((5 * density).toInt(), (6 * density).toInt(), (5 * density).toInt(), (6 * density).toInt())
         }
 
         // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
@@ -207,7 +207,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             setPadding((34 * density).toInt(), (26 * density).toInt(), (26 * density).toInt(), (26 * density).toInt())
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(234, 32, 32, 34), Color.argb(208, 24, 26, 31)),
+                intArrayOf(Color.argb(220, 54, 56, 64), Color.argb(190, 42, 45, 52)),
             ).apply {
                 cornerRadius = 28 * density
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(52, 255, 255, 255))
@@ -248,7 +248,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             setPadding((10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
             background = GradientDrawable().apply {
                 cornerRadius = 24 * density
-                setColor(Color.argb(150, 0, 0, 0))
+                setColor(Color.argb(90, 0, 0, 0))
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(38, 255, 255, 255))
             }
         }
@@ -258,7 +258,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
 
-        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (8 * density).toInt() })
+        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (4 * density).toInt() })
         content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
@@ -276,7 +276,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            dimAmount = 0.20f
+            dimAmount = 0.10f
             title = "Aerial study"
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
