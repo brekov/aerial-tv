@@ -194,10 +194,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     )
                 }
             }
-            background.alpha = 0.50f
+            background.alpha = 0.35f
             root.addView(background, FrameLayout.LayoutParams(-1, -1))
             root.addView(View(service).apply {
-                alpha = 0.50f
+                alpha = 0.35f
                 setBackground(GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
                     intArrayOf(Color.argb(185, 9, 28, 62), Color.argb(210, 3, 10, 26)),
@@ -207,7 +207,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             root.addView(View(service).apply {
                 setBackground(GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(Color.argb(128, 9, 28, 62), Color.argb(132, 3, 10, 26)),
+                    intArrayOf(Color.argb(90, 9, 28, 62), Color.argb(92, 3, 10, 26)),
                 ))
             }, FrameLayout.LayoutParams(-1, -1))
         }
