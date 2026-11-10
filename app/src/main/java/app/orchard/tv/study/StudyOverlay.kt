@@ -242,7 +242,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(80, 125, 200, 255))
             }
         }
-        title = text(18f, Color.WHITE, Typeface.BOLD).apply {
+        title = text(16f, Color.WHITE, Typeface.BOLD).apply {
             text = service.getString(R.string.study_title)
             maxLines = 1
             setSingleLine()
@@ -308,8 +308,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
 
-        content.addView(leftCard, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (7 * density).toInt() })
-        content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
+        content.addView(leftCard, LinearLayout.LayoutParams(0, -1, 0.25f).apply { rightMargin = (7 * density).toInt() })
+        content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.75f))
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
 
