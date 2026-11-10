@@ -280,7 +280,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 leftMargin = (10 * density).toInt()
                 rightMargin = (10 * density).toInt()
             })
-            addView(playback, FrameLayout.LayoutParams(-1, (96 * density).toInt(), Gravity.TOP))
+            addView(playback, FrameLayout.LayoutParams(-1, (96 * density).toInt(), Gravity.TOP).apply {
+                leftMargin = (10 * density).toInt()
+                rightMargin = (10 * density).toInt()
+            })
             addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
         val centerBlock = LinearLayout(service).apply {
