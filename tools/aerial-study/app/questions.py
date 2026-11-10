@@ -530,9 +530,11 @@ def judge_transcript(
     accepted = split_accepted_answers(question.get("answer", ""))
     matched, retry, method, detail = match_answer_full(accepted, transcript)
     if matched:
+        detail["score"] = {"exact": 100, "pinyin": 94, "phonetic": 90, "fuzzy": 86}.get(method, 85)
         return True, method, detail
     if retry:
         detail["retry"] = True
+        detail["score"] = 60
         return False, "near_miss", detail
     detail["transcriptNormalized"] = normalized
     detail["acceptedCount"] = len(accepted)
@@ -545,5 +547,7 @@ def judge_transcript(
         )
         if ai_result is not None:
             detail["aiJudge"] = ai_result
+            detail["score"] = 85 if ai_result else 0
             return bool(ai_result), "ai", detail
+    detail["score"] = 0
     return False, "exact", detail

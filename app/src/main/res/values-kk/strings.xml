@@ -339,4 +339,7 @@
     <string name="study_voice_retry">Қайта оқыңыз</string>
     <string name="study_voice_listen_follow">Тыңдаңыз: %1$s. Содан кейін қайталаңыз.</string>
     <string name="study_voice_follow">Менен кейін қайталаңыз.</string>
+    <string name="study_repeat">Қайталау</string>
+    <string name="study_next">Келесі</string>
+    <string name="study_score">%1$d балл</string>
 </resources>

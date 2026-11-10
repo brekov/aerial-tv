@@ -10,7 +10,7 @@ import java.net.URL
 object StudyClient {
     data class Question(val id: Long, val type: String, val imageUrl: String?, val text: String?, val say: String?)
     data class Session(val id: String, val questions: List<Question>)
-    data class Answer(val correct: Boolean, val progress: Int, val finished: Boolean, val restart: Boolean, val retry: Boolean)
+    data class Answer(val correct: Boolean, val score: Int, val progress: Int, val finished: Boolean, val restart: Boolean, val retry: Boolean)
 
     private fun base() = StudySettings.baseUrl.trimEnd('/')
 
@@ -65,6 +65,7 @@ object StudyClient {
         val progress = json.optJSONObject("progress")
         return Answer(
             correct = json.optBoolean("correct"),
+            score = json.optInt("score", 0).coerceIn(0, 100),
             progress = progress?.optInt("currentIndex") ?: 0,
             finished = json.optBoolean("finished"),
             restart = json.optBoolean("restart"),

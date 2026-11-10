@@ -369,4 +369,7 @@
     <string name="study_voice_retry">再读一次</string>
     <string name="study_voice_listen_follow">请听：%1$s。听完后请跟读。</string>
     <string name="study_voice_follow">请跟我读。</string>
+    <string name="study_repeat">重读</string>
+    <string name="study_next">下一题</string>
+    <string name="study_score">%1$d 分</string>
 </resources>

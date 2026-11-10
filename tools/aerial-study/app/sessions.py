@@ -184,6 +184,7 @@ def submit_answer(
         transcript,
         allow_ai=allow_ai_judge,
     )
+    score = int(judge_detail.get("score") or 0)
 
     now = utcnow()
     timestamp = iso(now)
@@ -260,6 +261,7 @@ def submit_answer(
     assert row is not None
     result: dict[str, Any] = {
         "correct": bool(correct),
+        "score": max(0, min(100, score)),
         "retry": bool(retry),
         "progress": progress(row),
         # A retry keeps the current question; it is not a restart.

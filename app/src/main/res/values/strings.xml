@@ -370,4 +370,7 @@
     <string name="study_voice_retry">Please read it again</string>
     <string name="study_voice_listen_follow">Listen: %1$s. Then say it after me.</string>
     <string name="study_voice_follow">Please say it after me.</string>
+    <string name="study_repeat">Replay</string>
+    <string name="study_next">Next</string>
+    <string name="study_score">%1$d pts</string>
 </resources>
