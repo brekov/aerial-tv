@@ -277,21 +277,15 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
         left.addView(promptRow, LinearLayout.LayoutParams(-1, -2))
 
-        val cueSize = (150 * density).toInt()
+        val cueSize = (170 * density).toInt()
         orb = StudyOrbView(service)
         cue = ImageView(service).apply {
-            setPadding((34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt())
+            setPadding((39 * density).toInt(), (39 * density).toInt(), (39 * density).toInt(), (39 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
         wave = StudyWaveView(service)
         val orbHolder = FrameLayout(service).apply {
-            clipToOutline = true
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setOval(0, 0, view.width, view.height)
-                }
-            }
             addView(orb, FrameLayout.LayoutParams(cueSize, cueSize))
             addView(cue, FrameLayout.LayoutParams(cueSize, cueSize))
         }
