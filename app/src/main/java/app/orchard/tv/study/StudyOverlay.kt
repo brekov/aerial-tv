@@ -83,8 +83,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var progress: ProgressBar
     private lateinit var status: TextView
     private lateinit var cue: ImageView
-    private lateinit var orb: StudyOrbView
-    private lateinit var orbHolder: FrameLayout
     private lateinit var wave: StudyWaveView
     private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
@@ -268,30 +266,25 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
 
-        val cueSize = (75 * density).toInt()
-        orb = StudyOrbView(service)
+        val cueSize = (84 * density).toInt()
         cue = ImageView(service).apply {
-            setPadding((17 * density).toInt(), (17 * density).toInt(), (17 * density).toInt(), (17 * density).toInt())
+            setPadding((10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
-        orbHolder = FrameLayout(service).apply {
-            addView(orb, FrameLayout.LayoutParams(cueSize, cueSize))
-            addView(cue, FrameLayout.LayoutParams(cueSize, cueSize))
-        }
         wave = StudyWaveView(service)
         val cueHolder = FrameLayout(service).apply {
-            addView(wave, FrameLayout.LayoutParams(-1, (42 * density).toInt(), Gravity.TOP).apply {
-                leftMargin = (18 * density).toInt()
-                rightMargin = (18 * density).toInt()
+            addView(wave, FrameLayout.LayoutParams(-1, (96 * density).toInt(), Gravity.TOP).apply {
+                leftMargin = (10 * density).toInt()
+                rightMargin = (10 * density).toInt()
             })
-            addView(orbHolder, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
+            addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
         val centerBlock = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        centerBlock.addView(cueHolder, LinearLayout.LayoutParams(-1, (cueSize + (42 * density).toInt())))
+        centerBlock.addView(cueHolder, LinearLayout.LayoutParams(-1, (100 * density).toInt()))
         centerBlock.addView(status, LinearLayout.LayoutParams(-1, -2))
         left.addView(centerBlock, LinearLayout.LayoutParams(-1, 0, 1f))
         sadStar = ImageView(service).apply {
@@ -359,7 +352,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     /** Big, animated non-text cue so a child can see whether to listen, speak or wait. */
     private fun showCue(mode: Cue) {
         if (!::cue.isInitialized || closed) return
-        cue.visibility = View.VISIBLE
         cue.setImageResource(
             when (mode) {
                 Cue.READY -> R.drawable.study_cue_mic
@@ -370,47 +362,34 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 Cue.CROSS -> R.drawable.study_cue_cross
             }
         )
-        val density = service.resources.displayMetrics.density
-        when (mode) {
-            Cue.CHECK -> orb.solid(Color.rgb(48, 209, 88))
-            Cue.CROSS -> orb.solid(Color.rgb(255, 69, 58))
-            else -> orb.blue()
+        val result = mode == Cue.CHECK || mode == Cue.CROSS
+        cue.visibility = if (result) View.VISIBLE else View.INVISIBLE
+        cue.colorFilter = when (mode) {
+            Cue.CHECK -> android.graphics.PorterDuffColorFilter(Color.rgb(48, 209, 88), android.graphics.PorterDuff.Mode.SRC_IN)
+            Cue.CROSS -> android.graphics.PorterDuffColorFilter(Color.rgb(255, 69, 58), android.graphics.PorterDuff.Mode.SRC_IN)
+            else -> null
         }
         if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
-        val showWave = mode != Cue.LISTEN && mode != Cue.CHECK && mode != Cue.CROSS
+        val showWave = mode == Cue.READY || mode == Cue.LISTEN || mode == Cue.SPEAK
         wave.setActive(showWave)
         wave.visibility = if (showWave) View.VISIBLE else View.INVISIBLE
         cueAnimator?.cancel()
         cue.rotation = 0f
-        orbHolder.scaleX = 1f
-        orbHolder.scaleY = 1f
+        cue.scaleX = 1f
+        cue.scaleY = 1f
         cue.alpha = 1f
-        cueAnimator = when (mode) {
-            Cue.PROCESS -> ValueAnimator.ofFloat(0f, 360f).apply {
-                duration = 3_000
-                repeatCount = ValueAnimator.INFINITE
-                interpolator = LinearInterpolator()
-                addUpdateListener { cue.rotation = it.animatedValue as Float }
-            }
-            Cue.CHECK, Cue.CROSS -> ValueAnimator.ofFloat(0.7f, 1.1f).apply {
+        cueAnimator = if (mode == Cue.CHECK || mode == Cue.CROSS) {
+            ValueAnimator.ofFloat(0.7f, 1.1f).apply {
                 duration = 660
                 addUpdateListener {
                     val scale = it.animatedValue as Float
-                    orbHolder.scaleX = scale
-                    orbHolder.scaleY = scale
+                    cue.scaleX = scale
+                    cue.scaleY = scale
                 }
-            }
-            else -> ValueAnimator.ofFloat(1f, 1.16f).apply {
-                duration = 1_560
-                repeatMode = ValueAnimator.REVERSE
-                repeatCount = ValueAnimator.INFINITE
-                addUpdateListener {
-                    val scale = it.animatedValue as Float
-                    orbHolder.scaleX = scale
-                    orbHolder.scaleY = scale
-                }
-            }
-        }.also { it.start() }
+            }.also { it.start() }
+        } else {
+            null
+        }
     }
 
     private fun hideCue() {
