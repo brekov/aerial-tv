@@ -14,7 +14,7 @@ class StudyPlaybackView(context: Context) : View(context) {
     private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        color = Color.rgb(105, 224, 255)
+        color = Color.rgb(91, 200, 255)
     }
     private val rect = RectF()
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -46,12 +46,15 @@ class StudyPlaybackView(context: Context) : View(context) {
         for (i in 0 until count) {
             val local = (phase + i / count.toFloat()) % 1f
             // Each arc grows then fades; the offset makes them appear in sequence.
-            val radius = (22f + i * 11f + local * 5f) * unit
+            val radius = (22f + i * 16f + local * 4f) * unit
             val alpha = (220f * sin(local * Math.PI).toFloat()).toInt().coerceIn(18, 220)
             arc.alpha = alpha
-            arc.strokeWidth = (5.2f + i * 0.55f) * unit
-            rect.set(cx - radius, cy - radius, cx + radius, cy + radius)
-            canvas.drawArc(rect, -39f, 78f, false, arc)
+            arc.strokeWidth = 11f * unit
+            // Wider horizontal spacing, but a deliberately short vertical ellipse so the
+            // arcs match the squat, rounded capsules of the recording waveform.
+            val ry = radius * 0.38f
+            rect.set(cx - radius, cy - ry, cx + radius, cy + ry)
+            canvas.drawArc(rect, -40f, 80f, false, arc)
         }
     }
 }
