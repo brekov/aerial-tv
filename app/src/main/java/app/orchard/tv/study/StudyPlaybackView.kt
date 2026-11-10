@@ -74,7 +74,7 @@ class StudyPlaybackView(context: Context) : View(context) {
                 dot.alpha = alpha
                 canvas.drawCircle(x, centerY, barWidth / 2f, dot)
             } else {
-                val bend = barWidth * 0.14f
+                val bend = barWidth * 0.38f
                 curve.reset()
                 curve.moveTo(x, centerY + h / 2f)
                 curve.quadTo(x + bend, centerY, x, centerY - h / 2f)
