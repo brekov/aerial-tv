@@ -193,8 +193,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     )
                 }
             }
+            background.alpha = 0.70f
             root.addView(background, FrameLayout.LayoutParams(-1, -1))
             root.addView(View(service).apply {
+                alpha = 0.70f
                 setBackground(GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
                     intArrayOf(Color.argb(185, 9, 28, 62), Color.argb(210, 3, 10, 26)),
@@ -204,7 +206,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             root.addView(View(service).apply {
                 setBackground(GradientDrawable(
                     GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(Color.argb(240, 9, 28, 62), Color.argb(250, 3, 10, 26)),
+                    intArrayOf(Color.argb(170, 9, 28, 62), Color.argb(175, 3, 10, 26)),
                 ))
             }, FrameLayout.LayoutParams(-1, -1))
         }
@@ -238,17 +240,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(80, 125, 200, 255))
             }
         }
-        val badge = ImageView(service).apply {
-            setImageResource(R.drawable.study_cue_speaker)
-            setColorFilter(Color.WHITE)
-            setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
-            background = GradientDrawable().apply {
-                cornerRadius = 13 * density
-                setColor(Color.argb(180, 45, 118, 220))
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(110, 180, 220, 255))
-            }
-        }
-        left.addView(badge, LinearLayout.LayoutParams((38 * density).toInt(), (38 * density).toInt()))
         title = text(18f, Color.WHITE, Typeface.BOLD).apply {
             text = service.getString(R.string.study_title)
             maxLines = 1
