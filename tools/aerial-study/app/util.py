@@ -155,6 +155,123 @@ def match_answer(accepted: list[str], transcript: str) -> tuple[bool, str, dict[
     return False, "exact", detail
 
 
+def _phones(word: str) -> list[list[str]]:
+    """CMU pronunciation variants without stress digits, when the package is present."""
+    try:
+        import pronouncing
+    except ImportError:
+        return []
+    try:
+        raw = pronouncing.phones_for_word(word.lower())
+    except Exception:
+        return []
+    return [re.sub(r"\d", "", line).split() for line in raw if line.strip()]
+
+
+def _candidate_words(value: str) -> list[str]:
+    return re.findall(r"[a-z]+", value.lower())
+
+
+def _phone_distance(left: list[str], right: list[str]) -> int:
+    if not left or not right:
+        return 99
+    previous = list(range(len(right) + 1))
+    for i, lvalue in enumerate(left, 1):
+        current = [i]
+        for j, rvalue in enumerate(right, 1):
+            current.append(min(
+                current[-1] + 1,
+                previous[j] + 1,
+                previous[j - 1] + (lvalue != rvalue),
+            ))
+        previous = current
+    return previous[-1]
+
+
+def match_answer_full(
+    accepted: list[str], transcript: str
+) -> tuple[bool, bool, str, dict[str, Any]]:
+    """Return (correct, retry, method, detail).
+
+    Correct is a confident pass. Retry is a near miss that should ask the child
+    to repeat without resetting the five-question run. Short Latin words remain
+    strict; only words of at least four letters get phonetic leniency.
+    """
+    normalized = normalize_answer(transcript)
+    candidate = _strip_edge_fillers(normalized)
+    detail: dict[str, Any] = {"transcriptNormalized": normalized, "acceptedCount": len(accepted)}
+    if not candidate:
+        return False, False, "exact", detail
+    if candidate in accepted:
+        return True, False, "exact", detail
+
+    for target in accepted:
+        target_clean = _strip_edge_fillers(target)
+        if not target_clean:
+            continue
+        if _CJK_RE.search(target_clean):
+            target_pinyin = _pinyin(target_clean)
+            candidate_pinyin = _pinyin(candidate)
+            if target_pinyin and target_pinyin == candidate_pinyin:
+                detail.update({
+                    "pinyinTarget": target_pinyin,
+                    "pinyinTranscript": candidate_pinyin,
+                })
+                return True, False, "pinyin", detail
+            if target_pinyin and candidate_pinyin:
+                pinyin_distance = _edit_distance(target_pinyin, candidate_pinyin)
+                if pinyin_distance == 1:
+                    detail.update({
+                        "pinyinTarget": target_pinyin,
+                        "pinyinTranscript": candidate_pinyin,
+                        "pinyinDistance": pinyin_distance,
+                        "retry": True,
+                    })
+                    return False, True, "near_miss", detail
+            continue
+
+        if len(target_clean) < 4:
+            continue
+
+        # Keep the existing spelling fuzzy rule for typos and plurals.
+        if abs(len(target_clean) - len(candidate)) <= 1:
+            ratio = SequenceMatcher(None, target_clean, candidate).ratio()
+            text_distance = _edit_distance(target_clean, candidate)
+            if ratio >= 0.82 and text_distance <= 1:
+                detail.update({
+                    "fuzzyTarget": target_clean,
+                    "fuzzyRatio": round(ratio, 3),
+                    "editDistance": text_distance,
+                })
+                return True, False, "fuzzy", detail
+
+        # Compare pronunciation, not spelling, for the lion/line class of ASR errors.
+        target_phones = _phones(target_clean)
+        candidate_phones = []
+        for word in _candidate_words(transcript):
+            candidate_phones.extend(_phones(word))
+        if not target_phones or not candidate_phones:
+            continue
+        best = 99
+        for left in target_phones:
+            for right in candidate_phones:
+                best = min(best, _phone_distance(left, right))
+        detail["phoneticDistance"] = best
+        if best <= 1:
+            return True, False, "phonetic", detail
+        if best == 2:
+            detail["retry"] = True
+            return False, True, "near_miss", detail
+
+    return False, False, "exact", detail
+
+
+def match_answer(accepted: list[str], transcript: str) -> tuple[bool, str, dict[str, Any]]:
+    """Backward-compatible wrapper used by older callers/tests."""
+    correct, _retry, method, detail = match_answer_full(accepted, transcript)
+    return correct, method, detail
+
+
 def epoch_seconds(value: str) -> int:
     return int(parse_iso(value).timestamp())
 

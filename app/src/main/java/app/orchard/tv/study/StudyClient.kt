@@ -8,9 +8,9 @@ import java.net.URL
 
 /** Small HTTP client for the LAN aerial-study service. All calls are blocking; use a worker. */
 object StudyClient {
-    data class Question(val id: Long, val type: String, val imageUrl: String?, val text: String?)
+    data class Question(val id: Long, val type: String, val imageUrl: String?, val text: String?, val say: String?)
     data class Session(val id: String, val questions: List<Question>)
-    data class Answer(val correct: Boolean, val progress: Int, val finished: Boolean, val restart: Boolean)
+    data class Answer(val correct: Boolean, val progress: Int, val finished: Boolean, val restart: Boolean, val retry: Boolean)
 
     private fun base() = StudySettings.baseUrl.trimEnd('/')
 
@@ -46,7 +46,13 @@ object StudyClient {
             val image = promptObj?.optString("imageUrl")?.takeIf { it.isNotBlank() }?.let {
                 if (it.startsWith("http")) it else base() + it
             }
-            Question(q.getLong("id"), q.optString("type", "word_image"), q.optString("imageUrl").takeIf { it.isNotBlank() } ?: image, promptText)
+            Question(
+                q.getLong("id"),
+                q.optString("type", "word_image"),
+                q.optString("imageUrl").takeIf { it.isNotBlank() } ?: image,
+                promptText,
+                q.optString("say").takeIf { it.isNotBlank() },
+            )
         })
     }
 
@@ -62,6 +68,7 @@ object StudyClient {
             progress = progress?.optInt("currentIndex") ?: 0,
             finished = json.optBoolean("finished"),
             restart = json.optBoolean("restart"),
+            retry = json.optBoolean("retry"),
         )
     }
 

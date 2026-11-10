@@ -366,4 +366,6 @@
     <string name="study_mic_ready">Say the answer</string>
     <string name="study_mic_listening">Listening…</string>
     <string name="study_mic_processing">Recognising…</string>
+    <string name="study_listen_first">Listen first</string>
+    <string name="study_voice_retry">Please read it again</string>
 </resources>

@@ -335,4 +335,6 @@
     <string name="study_mic_ready">Скажіть відповідь</string>
     <string name="study_mic_listening">Слухаю…</string>
     <string name="study_mic_processing">Розпізнавання…</string>
+    <string name="study_listen_first">Спочатку послухайте</string>
+    <string name="study_voice_retry">Прочитайте ще раз</string>
 </resources>

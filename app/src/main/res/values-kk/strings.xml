@@ -335,4 +335,6 @@
     <string name="study_mic_ready">Жауапты айтыңыз</string>
     <string name="study_mic_listening">Тыңдап жатырмын…</string>
     <string name="study_mic_processing">Тану…</string>
+    <string name="study_listen_first">Алдымен тыңдаңыз</string>
+    <string name="study_voice_retry">Қайта оқыңыз</string>
 </resources>

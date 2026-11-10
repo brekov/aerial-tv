@@ -24,6 +24,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # Answer matching for Chinese homophones; kept in a separate layer so requirements changes do not
 # force a full reinstall of faster-whisper/ctranslate2.
 RUN pip install --no-cache-dir "pypinyin>=0.51,<1"
+# English phoneme lookup (CMUdict) for repeated-word pronunciation matching.
+RUN pip install --no-cache-dir "pronouncing>=0.2,<1"
 # faster-whisper 1.2.1 still passes the removed PyAV metadata_errors argument.
 RUN sed -i 's/, metadata_errors="ignore"//' /usr/local/lib/python3.12/site-packages/faster_whisper/audio.py
 

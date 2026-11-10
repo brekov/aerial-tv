@@ -15,6 +15,7 @@ from .util import (
     iso,
     json_dumps,
     match_answer,
+    match_answer_full,
     normalize_answer,
     safe_json_loads,
     split_accepted_answers,
@@ -448,12 +449,19 @@ def _image_url(settings: Settings, question: dict[str, Any], session_id: str | N
 def question_public_dict(
     settings: Settings, question: dict[str, Any], session_id: str | None = None
 ) -> dict[str, Any]:
-    """Question payload sent to the TV; never includes the answer."""
+    """Question payload sent to the TV.
+
+    ``say`` is the target pronunciation for repeat-after-me TTS; it is not
+    rendered as text in the TV UI.
+    """
+    answer = str(question.get("answer") or "").split("|")[0].strip()
     return {
         "id": question["id"],
         "type": question["type"],
         "prompt": question["prompt"],
         "imageUrl": _image_url(settings, question, session_id),
+        # Repeat-after-me needs the TV to speak the target once; never render this as text.
+        "say": answer or None,
         "lang": question["lang"],
         "difficulty": question["difficulty"],
     }
@@ -520,9 +528,12 @@ def judge_transcript(
     """
     normalized = normalize_answer(transcript)
     accepted = split_accepted_answers(question.get("answer", ""))
-    matched, method, detail = match_answer(accepted, transcript)
+    matched, retry, method, detail = match_answer_full(accepted, transcript)
     if matched:
         return True, method, detail
+    if retry:
+        detail["retry"] = True
+        return False, "near_miss", detail
     detail["transcriptNormalized"] = normalized
     detail["acceptedCount"] = len(accepted)
     if allow_ai:

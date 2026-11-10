@@ -188,6 +188,7 @@ def submit_answer(
     now = utcnow()
     timestamp = iso(now)
     finished = False
+    retry = bool(judge_detail.get("retry"))
     with session(settings) as conn:
         attempt_no = (
             conn.execute(
@@ -196,6 +197,15 @@ def submit_answer(
             ).fetchone()[0]
             + 1
         )
+        if retry:
+            prior_retries = conn.execute(
+                "SELECT COUNT(*) FROM quiz_attempts WHERE session_id = ? AND question_id = ? AND judge_method = 'near_miss'",
+                (session_id, expected_question_id),
+            ).fetchone()[0]
+            if prior_retries >= 1:
+                # Only one follow-along retry per question; the second near miss is a wrong answer.
+                retry = False
+                judge_detail = {**judge_detail, "retryLimitReached": True}
         conn.execute(
             """
             INSERT INTO quiz_attempts(
@@ -214,7 +224,10 @@ def submit_answer(
                 timestamp,
             ),
         )
-        if correct:
+        if retry:
+            # Near miss: keep the same question and the same five-question progress.
+            pass
+        elif correct:
             next_index = current_index + 1
             finished = next_index >= len(question_ids)
             conn.execute(
@@ -247,9 +260,11 @@ def submit_answer(
     assert row is not None
     result: dict[str, Any] = {
         "correct": bool(correct),
+        "retry": bool(retry),
         "progress": progress(row),
+        # A retry keeps the current question; it is not a restart.
         "finished": bool(finished),
-        "restart": not bool(correct),
+        "restart": not bool(correct) and not bool(retry),
         "questionId": expected_question_id,
         "judgeMethod": judge_method,
         "session": _session_header(row),

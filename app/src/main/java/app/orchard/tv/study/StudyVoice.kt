@@ -9,6 +9,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.io.File
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -29,14 +30,27 @@ object StudyVoice {
             val gen = ++generation
             releaseCurrent()
             if (StudySettings.mimoConfigured) {
+                val cached = cachedFile(app, text)
+                if (cached != null && cached.length() > 0) {
+                    playFile(app, gen, text, cached, onDone, deleteOnDone = false)
+                    return@post
+                }
                 Thread({
                     val audio = runCatching { MimoClient.synthesize(text) }
                         .onFailure { Log.w(TAG, "MiMo TTS failed; using Android TTS", it) }
                         .getOrNull()
                     main.post {
                         if (gen != generation) return@post
-                        if (audio != null && audio.isNotEmpty()) playWav(app, gen, text, audio, onDone)
-                        else androidSpeak(app, gen, text, onDone)
+                        if (audio != null && audio.isNotEmpty()) {
+                            val target = cachedFile(app, text)
+                            if (target != null && runCatching { target.writeBytes(audio) }.isSuccess) {
+                                playFile(app, gen, text, target, onDone, deleteOnDone = false)
+                            } else {
+                                playWav(app, gen, text, audio, onDone)
+                            }
+                        } else {
+                            androidSpeak(app, gen, text, onDone)
+                        }
                     }
                 }, "study-tts").apply { isDaemon = true }.start()
             } else {
@@ -52,6 +66,13 @@ object StudyVoice {
         }
     }
 
+    private fun cachedFile(context: Context, text: String): File? = runCatching {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("$text|${StudySettings.mimoTtsModel}|${StudySettings.mimoVoice}".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        File(context.cacheDir, "study-tts-$digest.wav")
+    }.getOrNull()
+
     private fun playWav(context: Context, gen: Int, text: String, bytes: ByteArray, onDone: () -> Unit) {
         val file = runCatching { File.createTempFile("study-tts", ".wav", context.cacheDir) }.getOrNull()
         if (file == null) return androidSpeak(context, gen, text, onDone)
@@ -59,13 +80,24 @@ object StudyVoice {
             file.delete()
             return androidSpeak(context, gen, text, onDone)
         }
+        playFile(context, gen, text, file, onDone, deleteOnDone = true)
+    }
+
+    private fun playFile(
+        context: Context,
+        gen: Int,
+        text: String,
+        file: File,
+        onDone: () -> Unit,
+        deleteOnDone: Boolean,
+    ) {
         val done = AtomicBoolean(false)
         fun finish() {
             if (!done.compareAndSet(false, true)) return
             if (gen != generation) return
             runCatching { player?.release() }
             player = null
-            file.delete()
+            if (deleteOnDone) file.delete()
             main.post { if (gen == generation) onDone() }
         }
         val mp = MediaPlayer()
@@ -81,7 +113,7 @@ object StudyVoice {
             mp.setOnPreparedListener { if (gen == generation) it.start() else finish() }
             mp.setOnCompletionListener { finish() }
             mp.setOnErrorListener { _, _, _ ->
-                Log.w(TAG, "MiMo TTS playback error; using Android TTS")
+                Log.w(TAG, "TTS playback error; using Android TTS")
                 finish()
                 true
             }

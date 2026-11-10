@@ -205,6 +205,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private fun showQuestion() {
         val s = session ?: return
         val q = s.questions.getOrNull(index) ?: return finish(false)
+        stopSpeech()
         progress.max = s.questions.size
         progress.progress = index + 1
         status.visibility = View.INVISIBLE
@@ -214,9 +215,18 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             val bmp: Bitmap? = StudyClient.loadImage(q.imageUrl)
             main.post { if (!closed) image.setImageBitmap(bmp) }
         }
-        listen()
         main.removeCallbacks(timeout)
         main.postDelayed(timeout, 120_000)
+        if (!q.say.isNullOrBlank()) {
+            status.text = service.getString(R.string.study_listen_first)
+            status.setTextColor(Color.WHITE)
+            status.visibility = View.VISIBLE
+            StudyVoice.speak(service, q.say) {
+                main.post { if (!closed) listen() }
+            }
+        } else {
+            listen()
+        }
     }
 
     private fun listen() {
@@ -310,6 +320,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             main.post {
                 if (closed) return@post
                 answer.onSuccess { a ->
+                    if (a.retry) {
+                        // Near pronunciation miss: repeat the model word and listen to the same card.
+                        announce(R.string.study_voice_retry) {
+                            main.postDelayed({ if (!closed) showQuestion() }, 300)
+                        }
+                        return@post
+                    }
                     if (a.restart || !a.correct) {
                         announce(R.string.study_voice_wrong) {
                             main.postDelayed({ if (!closed) startSession() }, 500)

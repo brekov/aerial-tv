@@ -58,3 +58,16 @@ def test_match_answer_accepts_chinese_homophones_and_fillers():
     assert match_answer(["苹果"], "平果")[0:2] == (True, "pinyin")
     assert match_answer(["苹果"], "啊，苹果")[0:2] == (True, "exact")
     assert match_answer(["苹果"], "香蕉")[0] is False
+
+
+def test_phonetic_and_near_miss_classification():
+    import pytest
+    pytest.importorskip("pronouncing")
+    from app.util import match_answer_full
+
+    # lion and line differ by one phoneme (the schwa), but have poor spelling similarity.
+    assert match_answer_full(["lion"], "line")[0:3] == (True, False, "phonetic")
+    # lime is two phoneme edits away: ask for one repeat instead of failing the run.
+    assert match_answer_full(["lion"], "lime")[0:3] == (False, True, "near_miss")
+    assert match_answer_full(["lion"], "tiger")[0] is False
+    assert match_answer_full(["cat"], "bat")[0] is False

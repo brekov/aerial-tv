@@ -335,4 +335,6 @@
     <string name="study_mic_ready">Скажите ответ</string>
     <string name="study_mic_listening">Слушаю…</string>
     <string name="study_mic_processing">Распознавание…</string>
+    <string name="study_listen_first">Сначала послушайте</string>
+    <string name="study_voice_retry">Прочитайте ещё раз</string>
 </resources>

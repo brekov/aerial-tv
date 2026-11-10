@@ -47,6 +47,7 @@ def test_selection_uses_only_active_unique_questions(tv_client, question_factory
             "type",
             "prompt",
             "imageUrl",
+            "say",
             "lang",
             "difficulty",
         }
