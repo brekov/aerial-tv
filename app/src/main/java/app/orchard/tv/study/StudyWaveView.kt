@@ -18,7 +18,7 @@ class StudyWaveView(context: Context) : View(context) {
     private var level = 0f
     private var active = false
     private val animator = ValueAnimator.ofFloat(0f, (Math.PI * 2).toFloat()).apply {
-        duration = 900
+        duration = 2_700
         repeatCount = ValueAnimator.INFINITE
         addUpdateListener { phase = it.animatedValue as Float; invalidate() }
     }
