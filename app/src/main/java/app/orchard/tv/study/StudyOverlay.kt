@@ -85,6 +85,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var cue: ImageView
     private lateinit var orb: StudyOrbView
     private lateinit var orbHolder: FrameLayout
+    private lateinit var wave: StudyWaveView
     private lateinit var play: TextView
     private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
@@ -278,10 +279,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
         left.addView(promptRow, LinearLayout.LayoutParams(-1, -2))
 
-        val cueSize = (150 * density).toInt()
+        val cueSize = (75 * density).toInt()
         orb = StudyOrbView(service)
         cue = ImageView(service).apply {
-            setPadding((34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt())
+            setPadding((17 * density).toInt(), (17 * density).toInt(), (17 * density).toInt(), (17 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
@@ -289,7 +290,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             addView(orb, FrameLayout.LayoutParams(cueSize, cueSize))
             addView(cue, FrameLayout.LayoutParams(cueSize, cueSize))
         }
+        wave = StudyWaveView(service)
         val cueHolder = FrameLayout(service).apply {
+            addView(wave, FrameLayout.LayoutParams(-1, (42 * density).toInt(), Gravity.TOP).apply {
+                leftMargin = (18 * density).toInt()
+                rightMargin = (18 * density).toInt()
+            })
             addView(orbHolder, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
         left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -377,6 +383,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         if (::play.isInitialized) play.visibility = if (mode == Cue.READY) View.VISIBLE else View.GONE
         if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
+        val showWave = mode != Cue.LISTEN && mode != Cue.CHECK && mode != Cue.CROSS
+        wave.setActive(showWave)
+        wave.visibility = if (showWave) View.VISIBLE else View.INVISIBLE
         cueAnimator?.cancel()
         cue.rotation = 0f
         orbHolder.scaleX = 1f
@@ -448,6 +457,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         val q = s.questions.getOrNull(index) ?: return finish(false)
         stopSpeech()
         main.removeCallbacks(nextStep)
+        wave.setActive(false)
         progress.max = s.questions.size
         progress.progress = index + 1
         status.visibility = View.INVISIBLE
@@ -647,6 +657,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         main.removeCallbacks(pass)
         stopSpeech()
         hideCue()
+        wave.setActive(false)
         StudyVoice.stop()
         if (passed) StudySettings.resetWatch()
         main.post {
