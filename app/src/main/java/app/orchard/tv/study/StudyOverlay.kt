@@ -11,6 +11,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.text.TextUtils
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -75,6 +76,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private var session: StudyClient.Session? = null
     private var index = 0
     private var listening = false
+    private var listenGeneration = 0
     private var closed = false
     private var attempt = 0
     private var oldVolume = -1
@@ -111,14 +113,30 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
+        val density = service.resources.displayMetrics.density
         val header = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.START
-            setPadding(48, 14, 48, 12)
+            setPadding(48, 8, 48, 10)
             setBackgroundColor(Color.rgb(18, 18, 22))
         }
-        title = text(22f, Color.WHITE, Typeface.BOLD).apply { text = service.getString(R.string.study_title) }
-        val density = service.resources.displayMetrics.density
+        val titleRow = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        title = text(22f, Color.WHITE, Typeface.BOLD).apply {
+            text = service.getString(R.string.study_title)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        status = text(15f, Color.LTGRAY, Typeface.NORMAL).apply {
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(16, 0, 0, 0)
+            maxWidth = (service.resources.displayMetrics.widthPixels * 0.46f).toInt()
+            visibility = View.INVISIBLE
+        }
+        titleRow.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+        titleRow.addView(status, LinearLayout.LayoutParams(-2, -2))
         progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
             max = StudySettings.QUESTIONS
@@ -126,14 +144,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             progressBackgroundTintList = ColorStateList.valueOf(Color.rgb(49, 54, 66))
             minimumHeight = (3 * density).toInt().coerceAtLeast(2)
         }
-        status = text(17f, Color.LTGRAY, Typeface.NORMAL).apply {
-            gravity = Gravity.START
-            visibility = View.GONE
-        }
-        header.addView(title)
-        header.addView(progress, LinearLayout.LayoutParams(-1, (3 * density).toInt().coerceAtLeast(2)).apply { topMargin = 10 })
-        header.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 6 })
-        column.addView(header, LinearLayout.LayoutParams(-1, -2))
+        header.addView(titleRow, LinearLayout.LayoutParams(-1, -2))
+        header.addView(progress, LinearLayout.LayoutParams(-1, (3 * density).toInt().coerceAtLeast(2)).apply { topMargin = 8 })
+        // Fixed header height: showing feedback must not reflow or shrink the image.
+        column.addView(header, LinearLayout.LayoutParams(-1, (72 * density).toInt()))
         image = ImageView(service).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.BLACK)
@@ -166,6 +180,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
     private fun startSession() {
         status.text = service.getString(R.string.study_loading)
+        status.visibility = View.VISIBLE
         io.execute {
             val result = runCatching { StudyClient.startSession() }
             main.post {
@@ -192,7 +207,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         val q = s.questions.getOrNull(index) ?: return finish(false)
         progress.max = s.questions.size
         progress.progress = index + 1
-        status.visibility = View.GONE
+        status.visibility = View.INVISIBLE
         image.setImageBitmap(null)
         if (q.text != null) title.text = q.text else title.text = service.getString(R.string.study_title)
         if (q.imageUrl != null) io.execute {
@@ -207,23 +222,51 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private fun listen() {
         if (closed) return
         stopSpeech()
+        val generation = listenGeneration
+        status.text = service.getString(R.string.study_mic_ready)
+        status.setTextColor(Color.rgb(130, 220, 160))
+        status.visibility = View.VISIBLE
+        // Beep first, then let the microphone settle so the cue cannot become the answer.
+        StudyCue.start()
+        main.postDelayed({
+            if (!closed && generation == listenGeneration) startRecognizer(generation)
+        }, 350)
+    }
+
+    private fun startRecognizer(generation: Int) {
+        if (closed || generation != listenGeneration) return
         val component = ComponentName(service, AerialRecognitionService::class.java)
-        val recognizer = if (SpeechRecognizer.isRecognitionAvailable(service)) {
-            SpeechRecognizer.createSpeechRecognizer(service, component)
-        } else {
-            SpeechRecognizer.createSpeechRecognizer(service, component)
-        }
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(service, component)
         speech = recognizer
         listening = true
-        status.visibility = View.GONE
         recognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: android.os.Bundle?) {}
-            override fun onBeginningOfSpeech() {}
+            override fun onReadyForSpeech(params: android.os.Bundle?) {
+                if (closed || generation != listenGeneration) return
+                status.text = service.getString(R.string.study_mic_ready)
+                status.setTextColor(Color.rgb(130, 220, 160))
+                status.visibility = View.VISIBLE
+            }
+
+            override fun onBeginningOfSpeech() {
+                if (closed || generation != listenGeneration) return
+                status.text = service.getString(R.string.study_mic_listening)
+                status.setTextColor(Color.rgb(92, 164, 255))
+                status.visibility = View.VISIBLE
+            }
+
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
+
+            override fun onEndOfSpeech() {
+                if (closed || generation != listenGeneration) return
+                status.text = service.getString(R.string.study_mic_processing)
+                status.setTextColor(Color.LTGRAY)
+                status.visibility = View.VISIBLE
+                StudyCue.end()
+            }
+
             override fun onError(error: Int) {
-                if (closed) return
+                if (closed || generation != listenGeneration) return
                 listening = false
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
@@ -232,12 +275,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     else -> retry("recognizer $error")
                 }
             }
+
             override fun onResults(results: android.os.Bundle?) {
-                if (closed) return
+                if (closed || generation != listenGeneration) return
                 listening = false
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                 if (text.isBlank()) retry("empty") else submit(text)
             }
+
             override fun onPartialResults(partialResults: android.os.Bundle?) {}
             override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
         })
@@ -257,7 +302,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         val s = session ?: return
         val q = s.questions.getOrNull(index) ?: return
         status.text = service.getString(R.string.study_recognizing)
-        status.visibility = View.GONE
+        status.setTextColor(Color.LTGRAY)
+        status.visibility = View.VISIBLE
         main.removeCallbacks(timeout)
         io.execute {
             val answer = runCatching { StudyClient.answer(s.id, q.id, transcript) }
@@ -290,6 +336,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     /** Show text and speak the same reminder; only continue after the voice has finished. */
     private fun announce(res: Int, then: (() -> Unit)? = null) {
         val text = service.getString(res)
+        status.setTextColor(Color.WHITE)
         status.text = text
         status.visibility = View.VISIBLE
         StudyVoice.speak(service, text) {
@@ -341,6 +388,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     }
 
     private fun stopSpeech() {
+        listenGeneration++
         val r = speech ?: return
         speech = null
         runCatching { r.stopListening() }

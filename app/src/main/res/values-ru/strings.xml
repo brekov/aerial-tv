@@ -332,4 +332,7 @@
     <string name="study_mimo_saved">Сохранено</string>
     <string name="study_mimo_clear">Очистить</string>
     <string name="study_mimo_cancel">Отмена</string>
+    <string name="study_mic_ready">Скажите ответ</string>
+    <string name="study_mic_listening">Слушаю…</string>
+    <string name="study_mic_processing">Распознавание…</string>
 </resources>

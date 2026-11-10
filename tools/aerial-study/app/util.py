@@ -7,6 +7,7 @@ import re
 import secrets
 import unicodedata
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
 from typing import Any
 
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -17,6 +18,8 @@ _SECRET_RE = re.compile(
 )
 _BEARER_RE = re.compile(r"(?i)\b(bearer)\s+([A-Za-z0-9._~+/=-]+)")
 _KEYLIKE_RE = re.compile(r"\b(sk-[A-Za-z0-9_-]{6,})\b")
+_CJK_RE = re.compile(r"[\u3400-\u9fff]")
+_ZH_EDGE_FILLERS = ("嗯", "啊", "呃", "额", "这个", "那个", "请")
 
 
 def utcnow() -> datetime:
@@ -65,6 +68,91 @@ def split_accepted_answers(answer: str) -> list[str]:
     parts = re.split(r"[|\n]", answer or "")
     values = [normalize_answer(part) for part in parts]
     return [value for value in values if value]
+
+
+def _strip_edge_fillers(text: str) -> str:
+    """Drop common spoken fillers only at the edges, never inside a word."""
+    value = text
+    changed = True
+    while changed and value:
+        changed = False
+        for filler in _ZH_EDGE_FILLERS:
+            if value.startswith(filler) and len(value) > len(filler):
+                value = value[len(filler):]
+                changed = True
+            if value.endswith(filler) and len(value) > len(filler):
+                value = value[:-len(filler)]
+                changed = True
+    return value
+
+
+def _pinyin(value: str) -> str:
+    try:
+        from pypinyin import lazy_pinyin
+    except ImportError:
+        return ""
+    return "".join(lazy_pinyin(value, errors=lambda chars: list(chars)))
+
+
+def _edit_distance(left: str, right: str) -> int:
+    """Small Levenshtein distance; these answers are only a few characters."""
+    if len(left) < len(right):
+        left, right = right, left
+    previous = list(range(len(right) + 1))
+    for i, lchar in enumerate(left, 1):
+        current = [i]
+        for j, rchar in enumerate(right, 1):
+            current.append(min(
+                current[-1] + 1,
+                previous[j] + 1,
+                previous[j - 1] + (lchar != rchar),
+            ))
+        previous = current
+    return previous[-1]
+
+
+def match_answer(accepted: list[str], transcript: str) -> tuple[bool, str, dict[str, Any]]:
+    """Forgiving but bounded matching for a short spoken answer.
+
+    Exact normalized aliases first. For CJK targets a tone-less pinyin match
+    handles common ASR homophones; for Latin targets only a one-edit near miss
+    with high similarity is accepted. Short words stay strict.
+    """
+    normalized = normalize_answer(transcript)
+    candidate = _strip_edge_fillers(normalized)
+    detail: dict[str, Any] = {"transcriptNormalized": normalized, "acceptedCount": len(accepted)}
+    if not candidate:
+        return False, "exact", detail
+    if candidate in accepted:
+        return True, "exact", detail
+
+    for target in accepted:
+        target_clean = _strip_edge_fillers(target)
+        if not target_clean:
+            continue
+        if _CJK_RE.search(target_clean):
+            target_pinyin = _pinyin(target_clean)
+            candidate_pinyin = _pinyin(candidate)
+            if target_pinyin and target_pinyin == candidate_pinyin:
+                detail.update({
+                    "pinyinTarget": target_pinyin,
+                    "pinyinTranscript": candidate_pinyin,
+                })
+                return True, "pinyin", detail
+            continue
+
+        # Latin words: no fuzzy matching for very short targets (cat, dog, ...).
+        if len(target_clean) < 4:
+            continue
+        if abs(len(target_clean) - len(candidate)) > 1:
+            continue
+        ratio = SequenceMatcher(None, target_clean, candidate).ratio()
+        distance = _edit_distance(target_clean, candidate)
+        if ratio >= 0.82 and distance <= 1:
+            detail.update({"fuzzyTarget": target_clean, "fuzzyRatio": round(ratio, 3), "editDistance": distance})
+            return True, "fuzzy", detail
+
+    return False, "exact", detail
 
 
 def epoch_seconds(value: str) -> int:

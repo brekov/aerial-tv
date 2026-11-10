@@ -362,4 +362,7 @@
     <string name="study_mimo_saved">已保存</string>
     <string name="study_mimo_clear">清除</string>
     <string name="study_mimo_cancel">取消</string>
+    <string name="study_mic_ready">请开始说</string>
+    <string name="study_mic_listening">正在听…</string>
+    <string name="study_mic_processing">识别中…</string>
 </resources>

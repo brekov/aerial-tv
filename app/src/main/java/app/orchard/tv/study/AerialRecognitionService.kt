@@ -4,12 +4,15 @@ import android.content.Intent
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionService
 import android.speech.SpeechRecognizer
 import android.util.Log
+import app.orchard.tv.system.DiagLog
 import java.io.ByteArrayOutputStream
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
@@ -23,7 +26,8 @@ import kotlin.math.sqrt
  * private, so Aerial resolves its own RecognitionService explicitly (StudyOverlay). The service is
  * also exported as a standard component for other clients.
  *
- * Audio is captured at 16 kHz mono with a small adaptive-energy VAD. With a MiMo key configured
+ * Audio is captured at 16 kHz mono with optional AGC/NoiseSuppressor and a software preamp when
+ * the TV's bottom mic is weak, then a small adaptive-energy VAD. With a MiMo key configured
  * the utterance goes directly from the TV to MiMo-V2.5-ASR; otherwise it falls back to the LAN
  * /api/v1/asr service. No audio is stored.
  */
@@ -37,6 +41,7 @@ class AerialRecognitionService : RecognitionService() {
         private const val STOP_SILENCE_FRAMES = 60 // 1.2 s
         private const val MAX_FRAMES = 400 // 8 s
         private const val NO_SPEECH_FRAMES = 300 // 6 s
+        private const val SOFTWARE_GAIN = 2.0
         private val main = Handler(Looper.getMainLooper())
     }
 
@@ -95,6 +100,23 @@ class AerialRecognitionService : RecognitionService() {
             return fail(listener, "microphone unavailable")
         }
         record = recorder
+        var agc: AutomaticGainControl? = null
+        var ns: NoiseSuppressor? = null
+        val session = recorder.audioSessionId
+        if (session != 0) {
+            agc = runCatching {
+                AutomaticGainControl.create(session)?.takeIf { AutomaticGainControl.isAvailable() }?.apply {
+                    enabled = true
+                }
+            }.onFailure { Log.w(TAG, "AGC unavailable", it) }.getOrNull()
+            ns = runCatching {
+                NoiseSuppressor.create(session)?.takeIf { NoiseSuppressor.isAvailable() }?.apply {
+                    enabled = true
+                }
+            }.onFailure { Log.w(TAG, "noise suppressor unavailable", it) }.getOrNull()
+        }
+        val gain = if (agc?.enabled == true) 1.0 else SOFTWARE_GAIN
+        DiagLog.i("study: mic session=$session agc=${agc?.enabled == true} ns=${ns?.enabled == true} gain=$gain")
         try {
             recorder.startRecording()
         } catch (t: Throwable) {
@@ -103,7 +125,7 @@ class AerialRecognitionService : RecognitionService() {
             return fail(listener, "startRecording: ${t.javaClass.simpleName}")
         }
 
-        val frame = ShortArray(FRAME_SAMPLES)
+        val raw = ShortArray(FRAME_SAMPLES)
         val preRoll = ArrayDeque<ShortArray>()
         val utterance = ByteArrayOutputStream()
         var noise = 400.0
@@ -115,11 +137,12 @@ class AerialRecognitionService : RecognitionService() {
 
         try {
             while (!cancelled.get() && frames < NO_SPEECH_FRAMES + MAX_FRAMES) {
-                val read = recorder.read(frame, 0, frame.size)
+                val read = recorder.read(raw, 0, raw.size)
                 if (read <= 0) break
                 frames++
+                val frame = amplify(raw, read, gain)
                 val rms = rms(frame)
-                val active = rms > maxOf(noise * 3.0, 300.0)
+                val active = rms > maxOf(noise * 2.5, 180.0)
                 if (!started) {
                     if (!active) noise = noise * 0.95 + rms * 0.05
                     consecutiveSpeech = if (active) consecutiveSpeech + 1 else 0
@@ -160,10 +183,22 @@ class AerialRecognitionService : RecognitionService() {
             }
             main.post { if (!cancelled.get()) listener.results(results) }
         } finally {
+            runCatching { agc?.release() }
+            runCatching { ns?.release() }
             runCatching { recorder.stop() }
             runCatching { recorder.release() }
             record = null
         }
+    }
+
+    /** Linear preamp with peak limiting; only used when hardware AGC is unavailable. */
+    private fun amplify(source: ShortArray, count: Int, gain: Double): ShortArray {
+        val out = ShortArray(count)
+        for (i in 0 until count) {
+            val value = (source[i] * gain).coerceIn(-32768.0, 32767.0)
+            out[i] = value.toInt().toShort()
+        }
+        return out
     }
 
     private fun fail(listener: Callback, reason: String) {

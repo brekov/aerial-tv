@@ -332,4 +332,7 @@
     <string name="study_mimo_saved">Сақталды</string>
     <string name="study_mimo_clear">Тазалау</string>
     <string name="study_mimo_cancel">Болдырмау</string>
+    <string name="study_mic_ready">Жауапты айтыңыз</string>
+    <string name="study_mic_listening">Тыңдап жатырмын…</string>
+    <string name="study_mic_processing">Тану…</string>
 </resources>

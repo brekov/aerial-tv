@@ -14,6 +14,7 @@ from .providers import judge_answer_ai
 from .util import (
     iso,
     json_dumps,
+    match_answer,
     normalize_answer,
     safe_json_loads,
     split_accepted_answers,
@@ -519,12 +520,11 @@ def judge_transcript(
     """
     normalized = normalize_answer(transcript)
     accepted = split_accepted_answers(question.get("answer", ""))
-    detail: dict[str, Any] = {
-        "transcriptNormalized": normalized,
-        "acceptedCount": len(accepted),
-    }
-    if normalized and normalized in accepted:
-        return True, "exact", detail
+    matched, method, detail = match_answer(accepted, transcript)
+    if matched:
+        return True, method, detail
+    detail["transcriptNormalized"] = normalized
+    detail["acceptedCount"] = len(accepted)
     if allow_ai:
         ai_result = judge_answer_ai(
             settings,
