@@ -1,5 +1,6 @@
 package app.orchard.tv.study
 
+import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.res.ColorStateList
 import android.content.Context
@@ -7,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
@@ -20,6 +22,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -72,6 +75,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var title: TextView
     private lateinit var progress: ProgressBar
     private lateinit var status: TextView
+    private lateinit var cue: ImageView
+    private var cueAnimator: ValueAnimator? = null
+    private enum class Cue { LISTEN, SPEAK, PROCESS, CHECK, CROSS }
     private var speech: SpeechRecognizer? = null
     private var session: StudyClient.Session? = null
     private var index = 0
@@ -154,6 +160,20 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         column.addView(image, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
+        val cueSize = (176 * density).toInt()
+        cue = ImageView(service).apply {
+            setBackground(GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(115, 0, 0, 0))
+                setStroke((2 * density).toInt().coerceAtLeast(2), Color.argb(150, 255, 255, 255))
+            })
+            setPadding((34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt())
+            visibility = View.INVISIBLE
+            contentDescription = "Study cue"
+        }
+        root.addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.END or Gravity.CENTER_VERTICAL).apply {
+            rightMargin = (54 * density).toInt()
+        })
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -178,6 +198,59 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         typeface = Typeface.create(Typeface.DEFAULT, style)
     }
 
+    /** Big, animated non-text cue so a child can see whether to listen, speak or wait. */
+    private fun showCue(mode: Cue) {
+        if (!::cue.isInitialized || closed) return
+        cue.visibility = View.VISIBLE
+        cue.setImageResource(
+            when (mode) {
+                Cue.LISTEN -> R.drawable.study_cue_speaker
+                Cue.SPEAK -> R.drawable.study_cue_mic
+                Cue.PROCESS -> R.drawable.study_cue_processing
+                Cue.CHECK -> R.drawable.study_cue_check
+                Cue.CROSS -> R.drawable.study_cue_cross
+            }
+        )
+        cueAnimator?.cancel()
+        cue.rotation = 0f
+        cue.scaleX = 1f
+        cue.scaleY = 1f
+        cue.alpha = 1f
+        cueAnimator = when (mode) {
+            Cue.PROCESS -> ValueAnimator.ofFloat(0f, 360f).apply {
+                duration = 1_000
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                addUpdateListener { cue.rotation = it.animatedValue as Float }
+            }
+            Cue.CHECK, Cue.CROSS -> ValueAnimator.ofFloat(0.7f, 1.1f).apply {
+                duration = 220
+                addUpdateListener {
+                    val scale = it.animatedValue as Float
+                    cue.scaleX = scale
+                    cue.scaleY = scale
+                }
+            }
+            else -> ValueAnimator.ofFloat(1f, 1.16f).apply {
+                duration = 520
+                repeatMode = ValueAnimator.REVERSE
+                repeatCount = ValueAnimator.INFINITE
+                addUpdateListener {
+                    val scale = it.animatedValue as Float
+                    cue.scaleX = scale
+                    cue.scaleY = scale
+                }
+            }
+        }.also { it.start() }
+    }
+
+    private fun hideCue() {
+        if (!::cue.isInitialized) return
+        cueAnimator?.cancel()
+        cueAnimator = null
+        cue.visibility = View.INVISIBLE
+    }
+
     private fun startSession() {
         status.text = service.getString(R.string.study_loading)
         status.visibility = View.VISIBLE
@@ -190,12 +263,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     index = 0
                     attempt = 0
                     if (s.questions.isEmpty()) {
+                        showCue(Cue.CROSS)
                         announce(R.string.study_voice_error) { retryLater() }
                     } else {
                         showQuestion()
                     }
                 }.onFailure {
                     Log.w(TAG, "study session failed", it)
+                    showCue(Cue.CROSS)
                     announce(R.string.study_voice_error) { retryLater() }
                 }
             }
@@ -217,15 +292,19 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         main.removeCallbacks(timeout)
         main.postDelayed(timeout, 120_000)
+        showCue(Cue.LISTEN)
         if (!q.say.isNullOrBlank()) {
             status.text = service.getString(R.string.study_listen_first)
             status.setTextColor(Color.WHITE)
             status.visibility = View.VISIBLE
-            StudyVoice.speak(service, q.say) {
+            // One spoken instruction includes the model word, so a pre-reader knows what follows.
+            StudyVoice.speak(service, service.getString(R.string.study_voice_listen_follow, q.say)) {
                 main.post { if (!closed) listen() }
             }
         } else {
-            listen()
+            StudyVoice.speak(service, service.getString(R.string.study_voice_follow)) {
+                main.post { if (!closed) listen() }
+            }
         }
     }
 
@@ -233,6 +312,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         if (closed) return
         stopSpeech()
         val generation = listenGeneration
+        showCue(Cue.SPEAK)
         status.text = service.getString(R.string.study_mic_ready)
         status.setTextColor(Color.rgb(130, 220, 160))
         status.visibility = View.VISIBLE
@@ -252,6 +332,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: android.os.Bundle?) {
                 if (closed || generation != listenGeneration) return
+                showCue(Cue.SPEAK)
                 status.text = service.getString(R.string.study_mic_ready)
                 status.setTextColor(Color.rgb(130, 220, 160))
                 status.visibility = View.VISIBLE
@@ -259,6 +340,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
             override fun onBeginningOfSpeech() {
                 if (closed || generation != listenGeneration) return
+                showCue(Cue.SPEAK)
                 status.text = service.getString(R.string.study_mic_listening)
                 status.setTextColor(Color.rgb(92, 164, 255))
                 status.visibility = View.VISIBLE
@@ -269,6 +351,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
             override fun onEndOfSpeech() {
                 if (closed || generation != listenGeneration) return
+                showCue(Cue.PROCESS)
                 status.text = service.getString(R.string.study_mic_processing)
                 status.setTextColor(Color.LTGRAY)
                 status.visibility = View.VISIBLE
@@ -311,6 +394,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private fun submit(transcript: String) {
         val s = session ?: return
         val q = s.questions.getOrNull(index) ?: return
+        showCue(Cue.PROCESS)
         status.text = service.getString(R.string.study_recognizing)
         status.setTextColor(Color.LTGRAY)
         status.visibility = View.VISIBLE
@@ -322,12 +406,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 answer.onSuccess { a ->
                     if (a.retry) {
                         // Near pronunciation miss: repeat the model word and listen to the same card.
+                        showCue(Cue.SPEAK)
                         announce(R.string.study_voice_retry) {
                             main.postDelayed({ if (!closed) showQuestion() }, 300)
                         }
                         return@post
                     }
                     if (a.restart || !a.correct) {
+                        showCue(Cue.CROSS)
                         announce(R.string.study_voice_wrong) {
                             main.postDelayed({ if (!closed) startSession() }, 500)
                         }
@@ -336,14 +422,17 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     index = a.progress
                     if (a.finished || index >= s.questions.size) {
                         main.removeCallbacks(timeout)
+                        showCue(Cue.CHECK)
                         announce(R.string.study_voice_passed) { main.postDelayed(pass, 600) }
                     } else {
+                        showCue(Cue.CHECK)
                         announce(R.string.study_voice_right) {
                             main.postDelayed({ if (!closed) showQuestion() }, 300)
                         }
                     }
                 }.onFailure {
                     Log.w(TAG, "answer failed", it)
+                    showCue(Cue.CROSS)
                     announce(R.string.study_voice_error) { retryLater() }
                 }
             }
@@ -366,11 +455,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         stopSpeech()
         attempt++
         DiagLog.i("study: retry $attempt ($reason)")
-        val voice = if (reason == "no speech" || reason == "empty") {
-            R.string.study_voice_no_speech
-        } else {
-            R.string.study_voice_error
-        }
+        val noSpeech = reason == "no speech" || reason == "empty"
+        showCue(if (noSpeech) Cue.SPEAK else Cue.CROSS)
+        val voice = if (noSpeech) R.string.study_voice_no_speech else R.string.study_voice_error
         announce(voice) {
             if (attempt <= 3) main.postDelayed({ if (!closed) listen() }, 500)
             else retryLater()
@@ -389,6 +476,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         main.removeCallbacks(timeout)
         main.removeCallbacks(pass)
         stopSpeech()
+        hideCue()
         StudyVoice.stop()
         if (passed) StudySettings.resetWatch()
         main.post {

@@ -367,4 +367,6 @@
     <string name="study_mic_processing">识别中…</string>
     <string name="study_listen_first">先听一遍</string>
     <string name="study_voice_retry">再读一次</string>
+    <string name="study_voice_listen_follow">请听：%1$s。听完后请跟读。</string>
+    <string name="study_voice_follow">请跟我读。</string>
 </resources>

@@ -337,4 +337,6 @@
     <string name="study_mic_processing">Тану…</string>
     <string name="study_listen_first">Алдымен тыңдаңыз</string>
     <string name="study_voice_retry">Қайта оқыңыз</string>
+    <string name="study_voice_listen_follow">Тыңдаңыз: %1$s. Содан кейін қайталаңыз.</string>
+    <string name="study_voice_follow">Менен кейін қайталаңыз.</string>
 </resources>

@@ -337,4 +337,6 @@
     <string name="study_mic_processing">Распознавание…</string>
     <string name="study_listen_first">Сначала послушайте</string>
     <string name="study_voice_retry">Прочитайте ещё раз</string>
+    <string name="study_voice_listen_follow">Послушайте: %1$s. Затем повторите.</string>
+    <string name="study_voice_follow">Повторите за мной.</string>
 </resources>
