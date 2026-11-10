@@ -58,7 +58,7 @@ class StudyPlaybackView(context: Context) : View(context) {
         val step = (lastX - firstX) / (count - 1)
         val barWidth = width / 23f
         val maxHeight = height * 0.56f
-        val baseY = height * 0.9f
+        val centerY = height / 2f
         for (i in 0 until count) {
             val x = firstX + i * step
             val linear = i / (count - 1f)
@@ -72,12 +72,12 @@ class StudyPlaybackView(context: Context) : View(context) {
             bar.strokeWidth = barWidth
             if (i == 0) {
                 dot.alpha = alpha
-                canvas.drawCircle(x, baseY - barWidth / 2f, barWidth / 2f, dot)
+                canvas.drawCircle(x, centerY, barWidth / 2f, dot)
             } else {
                 val bend = barWidth * 0.14f
                 curve.reset()
-                curve.moveTo(x, baseY)
-                curve.quadTo(x + bend, baseY - h / 2f, x, baseY - h)
+                curve.moveTo(x, centerY + h / 2f)
+                curve.quadTo(x + bend, centerY, x, centerY - h / 2f)
                 canvas.drawPath(curve, bar)
             }
         }

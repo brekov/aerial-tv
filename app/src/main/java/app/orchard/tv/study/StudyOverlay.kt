@@ -229,7 +229,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
         val left = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((28 * density).toInt(), (22 * density).toInt(), (20 * density).toInt(), (22 * density).toInt())
+            setPadding((28 * density).toInt(), (22 * density).toInt(), (28 * density).toInt(), (22 * density).toInt())
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(Color.argb(238, 40, 105, 200), Color.argb(220, 5, 20, 48)),
