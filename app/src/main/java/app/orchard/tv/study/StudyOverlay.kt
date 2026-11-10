@@ -1,5 +1,6 @@
 package app.orchard.tv.study
 
+import android.accessibilityservice.AccessibilityService
 import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.res.ColorStateList
@@ -7,6 +8,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
@@ -18,6 +21,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -99,14 +103,51 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         closed = false
         index = 0
         attempt = 0
-        build()
+        captureBackdropThenShow()
+    }
+
+    private fun captureBackdropThenShow() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            showBuilt(null)
+            return
+        }
+        val requested = runCatching {
+            service.takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                service.mainExecutor,
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                        val bitmap = runCatching {
+                            Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
+                                ?.copy(Bitmap.Config.ARGB_8888, false)
+                        }.getOrNull()
+                        runCatching { result.hardwareBuffer.close() }
+                        main.post { if (!closed) showBuilt(bitmap) }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        Log.w(TAG, "study backdrop screenshot failed: $errorCode")
+                        main.post { if (!closed) showBuilt(null) }
+                    }
+                },
+            )
+        }
+        if (requested.isFailure) {
+            Log.w(TAG, "study backdrop screenshot unavailable", requested.exceptionOrNull())
+            showBuilt(null)
+        }
+    }
+
+    private fun showBuilt(backdrop: Bitmap?) {
+        if (closed) return
+        build(backdrop)
         pauseAudio()
         HomeGuardService.studyOverlayChanged()
         startSession()
         DiagLog.i("study: overlay shown")
     }
 
-    private fun build() {
+    private fun build(backdrop: Bitmap?) {
         root = FrameLayout(service).apply {
             setBackgroundColor(Color.TRANSPARENT)
             isFocusable = true
@@ -115,6 +156,34 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         val density = service.resources.displayMetrics.density
         val screenWidth = service.resources.displayMetrics.widthPixels
+
+        // Aerial's glass is frosted wallpaper. An accessibility overlay cannot share that bitmap,
+        // so take the live frame underneath once, blur it, and use it as the glass backdrop.
+        if (backdrop != null) {
+            val background = ImageView(service).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageBitmap(backdrop)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setRenderEffect(
+                        RenderEffect.createBlurEffect(
+                            32f * density,
+                            32f * density,
+                            Shader.TileMode.CLAMP,
+                        ),
+                    )
+                }
+            }
+            root.addView(background, FrameLayout.LayoutParams(-1, -1))
+            root.addView(View(service).apply { setBackgroundColor(Color.argb(68, 0, 0, 0)) }, FrameLayout.LayoutParams(-1, -1))
+        } else {
+            root.addView(View(service).apply {
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.argb(210, 16, 19, 24), Color.argb(190, 28, 32, 38)),
+                )
+            }, FrameLayout.LayoutParams(-1, -1))
+        }
+
         val column = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
 
         // One full-width progress line at the very top. The split content starts below it.
@@ -129,7 +198,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
         val content = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (16 * density).toInt())
+            setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
         }
 
         // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
@@ -176,7 +245,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val imageStage = FrameLayout(service).apply {
-            setPadding((14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
+            setPadding((10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
             background = GradientDrawable().apply {
                 cornerRadius = 24 * density
                 setColor(Color.argb(150, 0, 0, 0))
@@ -189,7 +258,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
 
-        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (12 * density).toInt() })
+        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (8 * density).toInt() })
         content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
@@ -207,7 +276,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            dimAmount = 0.45f
+            dimAmount = 0.20f
             title = "Aerial study"
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
