@@ -84,6 +84,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var status: TextView
     private lateinit var cue: ImageView
     private lateinit var wave: StudyWaveView
+    private lateinit var playback: StudyPlaybackView
     private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
     private enum class Cue { READY, LISTEN, SPEAK, PROCESS, CHECK, CROSS }
@@ -273,11 +274,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             contentDescription = "Study cue"
         }
         wave = StudyWaveView(service)
+        playback = StudyPlaybackView(service)
         val cueHolder = FrameLayout(service).apply {
             addView(wave, FrameLayout.LayoutParams(-1, (96 * density).toInt(), Gravity.TOP).apply {
                 leftMargin = (10 * density).toInt()
                 rightMargin = (10 * density).toInt()
             })
+            addView(playback, FrameLayout.LayoutParams(-1, (96 * density).toInt(), Gravity.TOP))
             addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
         val centerBlock = LinearLayout(service).apply {
@@ -370,7 +373,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             else -> null
         }
         if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
-        val showWave = mode == Cue.READY || mode == Cue.LISTEN || mode == Cue.SPEAK
+        val showPlayback = mode == Cue.LISTEN
+        playback.setActive(showPlayback)
+        val showWave = mode == Cue.READY || mode == Cue.SPEAK
         wave.setActive(showWave)
         wave.visibility = if (showWave) View.VISIBLE else View.INVISIBLE
         cueAnimator?.cancel()
@@ -397,6 +402,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         cueAnimator?.cancel()
         cueAnimator = null
         cue.visibility = View.INVISIBLE
+        if (::playback.isInitialized) playback.setActive(false)
     }
 
     private fun startSession() {
@@ -431,6 +437,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         stopSpeech()
         main.removeCallbacks(nextStep)
         wave.setActive(false)
+        playback.setActive(false)
         progress.max = s.questions.size
         progress.progress = index + 1
         status.visibility = View.INVISIBLE
@@ -631,6 +638,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         stopSpeech()
         hideCue()
         wave.setActive(false)
+        playback.setActive(false)
         StudyVoice.stop()
         if (passed) StudySettings.resetWatch()
         main.post {
