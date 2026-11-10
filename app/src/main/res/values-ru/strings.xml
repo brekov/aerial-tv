@@ -304,7 +304,7 @@
     <string name="study_loading">Загрузка вопросов…</string>
     <string name="study_listening">Скажите ответ</string>
     <string name="study_recognizing">Распознавание…</string>
-    <string name="study_right">Верно</string>
+    <string name="study_right">Правильно!</string>
     <string name="study_wrong">Ошибка — начнём заново</string>
     <string name="study_passed">Можно продолжать смотреть</string>
     <string name="study_error">Сервис обучения недоступен</string>
@@ -342,4 +342,7 @@
     <string name="study_repeat">Повторить</string>
     <string name="study_next">Далее</string>
     <string name="study_score">%1$d балл</string>
+    <string name="study_wrong_hint">Неправильно
+Попробуй ещё раз, следи за произношением</string>
+    <string name="study_next_auto">Следующий вопрос начнётся автоматически…</string>
 </resources>

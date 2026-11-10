@@ -22,6 +22,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.util.TypedValue
 import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
@@ -84,6 +85,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var cue: ImageView
     private lateinit var orb: StudyOrbView
     private lateinit var wave: StudyWaveView
+    private lateinit var play: TextView
+    private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
     private enum class Cue { READY, LISTEN, SPEAK, PROCESS, CHECK, CROSS }
     private var speech: SpeechRecognizer? = null
@@ -220,13 +223,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
         val content = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding((5 * density).toInt(), (6 * density).toInt(), (5 * density).toInt(), (6 * density).toInt())
+            setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
         }
 
         // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
         val left = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((34 * density).toInt(), (26 * density).toInt(), (26 * density).toInt(), (26 * density).toInt())
+            setPadding((28 * density).toInt(), (22 * density).toInt(), (20 * density).toInt(), (22 * density).toInt())
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(Color.argb(220, 24, 61, 116), Color.argb(195, 8, 27, 60)),
@@ -235,20 +238,44 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(80, 125, 200, 255))
             }
         }
-        title = text(22f, Color.WHITE, Typeface.BOLD).apply {
+        val badge = ImageView(service).apply {
+            setImageResource(R.drawable.study_cue_speaker)
+            setColorFilter(Color.WHITE)
+            setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 13 * density
+                setColor(Color.argb(180, 45, 118, 220))
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(110, 180, 220, 255))
+            }
+        }
+        left.addView(badge, LinearLayout.LayoutParams((38 * density).toInt(), (38 * density).toInt()))
+        title = text(18f, Color.WHITE, Typeface.BOLD).apply {
             text = service.getString(R.string.study_title)
             maxLines = 1
+            setSingleLine()
             ellipsize = TextUtils.TruncateAt.END
+            setPadding(0, (12 * density).toInt(), 0, 0)
         }
         status = text(17f, Color.rgb(130, 230, 160), Typeface.BOLD).apply {
-            maxWidth = (screenWidth * 0.17f).toInt()
+            maxWidth = (screenWidth * 0.24f).toInt()
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
             setPadding(0, (8 * density).toInt(), 0, 0)
             visibility = View.INVISIBLE
         }
+        play = text(18f, Color.rgb(86, 220, 130), Typeface.BOLD).apply {
+            text = "▶"
+            visibility = View.GONE
+            setPadding(0, (8 * density).toInt(), (8 * density).toInt(), 0)
+        }
+        val promptRow = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        promptRow.addView(play, LinearLayout.LayoutParams(-2, -2))
+        promptRow.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
-        left.addView(status, LinearLayout.LayoutParams(-1, -2))
+        left.addView(promptRow, LinearLayout.LayoutParams(-1, -2))
 
         val cueSize = (150 * density).toInt()
         orb = StudyOrbView(service)
@@ -258,15 +285,30 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             contentDescription = "Study cue"
         }
         wave = StudyWaveView(service)
+        val orbHolder = FrameLayout(service).apply {
+            clipToOutline = true
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
+            addView(orb, FrameLayout.LayoutParams(cueSize, cueSize))
+            addView(cue, FrameLayout.LayoutParams(cueSize, cueSize))
+        }
         val cueHolder = FrameLayout(service).apply {
             addView(wave, FrameLayout.LayoutParams(-1, (58 * density).toInt(), Gravity.TOP).apply {
                 leftMargin = (30 * density).toInt()
                 rightMargin = (30 * density).toInt()
             })
-            addView(orb, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
-            addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
+            addView(orbHolder, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
         left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
+        sadStar = ImageView(service).apply {
+            setImageResource(R.drawable.study_cue_star_sad)
+            visibility = View.GONE
+            contentDescription = "Sad star"
+        }
+        left.addView(sadStar, LinearLayout.LayoutParams((56 * density).toInt(), (56 * density).toInt()).apply { gravity = Gravity.CENTER_HORIZONTAL })
 
         val imageStage = FrameLayout(service).apply {
             setPadding((14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
@@ -282,8 +324,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
 
-        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.20f).apply { rightMargin = (4 * density).toInt() })
-        content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.80f))
+        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (7 * density).toInt() })
+        content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
 
@@ -375,6 +417,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             Cue.CROSS -> orb.solid(Color.rgb(255, 69, 58))
             else -> orb.blue()
         }
+        if (::play.isInitialized) play.visibility = if (mode == Cue.READY) View.VISIBLE else View.GONE
+        if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
         val showWave = mode == Cue.SPEAK || mode == Cue.PROCESS
         wave.setActive(showWave)
         wave.visibility = if (showWave) View.VISIBLE else View.INVISIBLE
@@ -588,7 +632,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     }
                     if (a.restart || !a.correct) {
                         showCue(Cue.CROSS)
-                        announce(R.string.study_voice_wrong) {
+                        val wrong = service.getString(R.string.study_wrong_hint)
+                        announce(R.string.study_voice_wrong, wrong) {
                             main.postDelayed({ if (!closed) startSession() }, 500)
                         }
                         return@post
@@ -601,7 +646,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     } else {
                         showCue(Cue.CHECK)
                         val display = service.getString(R.string.study_right) + " · " +
-                            service.getString(R.string.study_score, a.score)
+                            service.getString(R.string.study_score, a.score) + "\n" +
+                            service.getString(R.string.study_next_auto)
                         announce(R.string.study_voice_right, display, { scheduleNext() })
                     }
                 }.onFailure {

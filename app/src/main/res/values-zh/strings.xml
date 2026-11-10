@@ -334,7 +334,7 @@
     <string name="study_loading">正在加载题目…</string>
     <string name="study_listening">请说出答案</string>
     <string name="study_recognizing">识别中…</string>
-    <string name="study_right">答对了</string>
+    <string name="study_right">读对了！</string>
     <string name="study_wrong">答错了，重新开始</string>
     <string name="study_passed">可以继续观看</string>
     <string name="study_error">学习服务不可用</string>
@@ -363,7 +363,7 @@
     <string name="study_mimo_clear">清除</string>
     <string name="study_mimo_cancel">取消</string>
     <string name="study_mic_ready">请开始说</string>
-    <string name="study_mic_listening">正在听…</string>
+    <string name="study_mic_listening">正在聆听……</string>
     <string name="study_mic_processing">识别中…</string>
     <string name="study_listen_first">先听一遍</string>
     <string name="study_voice_retry">再读一次</string>
@@ -372,4 +372,7 @@
     <string name="study_repeat">重读</string>
     <string name="study_next">下一题</string>
     <string name="study_score">%1$d 分</string>
+    <string name="study_wrong_hint">发音不正确
+请再试一次，注意发音哦~</string>
+    <string name="study_next_auto">下一题将自动开始…</string>
 </resources>
