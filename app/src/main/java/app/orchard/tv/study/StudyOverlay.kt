@@ -113,36 +113,31 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             isFocusableInTouchMode = true
             setOnKeyListener { _, keyCode, _ -> keyCode != KeyEvent.KEYCODE_POWER }
         }
-        // The card is the exercise. The top strip owns its own space instead of covering the
-        // image; below it the image gets all remaining width and height.
-        val column = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
+        val density = service.resources.displayMetrics.density
+        val screenWidth = service.resources.displayMetrics.widthPixels
+        val row = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(Color.BLACK)
         }
-        val density = service.resources.displayMetrics.density
-        val header = LinearLayout(service).apply {
+
+        // Left: everything a child must notice. Right: the exercise image alone.
+        val left = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 8, 48, 10)
+            setPadding((38 * density).toInt(), (24 * density).toInt(), (28 * density).toInt(), (24 * density).toInt())
             setBackgroundColor(Color.rgb(18, 18, 22))
-        }
-        val titleRow = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
         }
         title = text(22f, Color.WHITE, Typeface.BOLD).apply {
             text = service.getString(R.string.study_title)
-            maxLines = 1
+            maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        status = text(15f, Color.LTGRAY, Typeface.NORMAL).apply {
-            maxLines = 1
+        status = text(16f, Color.LTGRAY, Typeface.NORMAL).apply {
+            maxWidth = (screenWidth * 0.26f).toInt()
+            maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            setPadding(16, 0, 0, 0)
-            maxWidth = (service.resources.displayMetrics.widthPixels * 0.46f).toInt()
+            setPadding(0, (8 * density).toInt(), 0, 0)
             visibility = View.INVISIBLE
         }
-        titleRow.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
-        titleRow.addView(status, LinearLayout.LayoutParams(-2, -2))
         progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
             max = StudySettings.QUESTIONS
@@ -150,16 +145,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             progressBackgroundTintList = ColorStateList.valueOf(Color.rgb(49, 54, 66))
             minimumHeight = (3 * density).toInt().coerceAtLeast(2)
         }
-        header.addView(titleRow, LinearLayout.LayoutParams(-1, -2))
-        header.addView(progress, LinearLayout.LayoutParams(-1, (3 * density).toInt().coerceAtLeast(2)).apply { topMargin = 8 })
-        // Fixed header height: showing feedback must not reflow or shrink the image.
-        column.addView(header, LinearLayout.LayoutParams(-1, (72 * density).toInt()))
-        image = ImageView(service).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(Color.BLACK)
-        }
-        column.addView(image, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(column, FrameLayout.LayoutParams(-1, -1))
+        left.addView(title, LinearLayout.LayoutParams(-1, -2))
+        left.addView(status, LinearLayout.LayoutParams(-1, -2))
+        left.addView(progress, LinearLayout.LayoutParams(-1, (3 * density).toInt().coerceAtLeast(2)).apply {
+            topMargin = (10 * density).toInt()
+        })
+
         val cueSize = (112 * density).toInt()
         cue = ImageView(service).apply {
             setBackground(GradientDrawable().apply {
@@ -171,9 +162,26 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
-        root.addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.END or Gravity.CENTER_VERTICAL).apply {
-            rightMargin = (44 * density).toInt()
-        })
+        val cueHolder = FrameLayout(service).apply {
+            addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
+        }
+        left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val imageStage = FrameLayout(service).apply {
+            setBackgroundColor(Color.BLACK)
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt())
+        }
+        image = ImageView(service).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
+        }
+        imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
+
+        row.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f))
+        row.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
+        root.addView(row, FrameLayout.LayoutParams(-1, -1))
+
+        // Keep the cue in the left panel, so it can never cover the exercise image.
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
