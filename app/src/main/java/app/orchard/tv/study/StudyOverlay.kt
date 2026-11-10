@@ -160,19 +160,19 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         column.addView(image, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
-        val cueSize = (176 * density).toInt()
+        val cueSize = (112 * density).toInt()
         cue = ImageView(service).apply {
             setBackground(GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.argb(115, 0, 0, 0))
                 setStroke((2 * density).toInt().coerceAtLeast(2), Color.argb(150, 255, 255, 255))
             })
-            setPadding((34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt())
+            setPadding((22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
         root.addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.END or Gravity.CENTER_VERTICAL).apply {
-            rightMargin = (54 * density).toInt()
+            rightMargin = (44 * density).toInt()
         })
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
