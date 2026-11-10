@@ -108,23 +108,41 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
     private fun build() {
         root = FrameLayout(service).apply {
-            setBackgroundColor(Color.rgb(18, 18, 22))
+            setBackgroundColor(Color.TRANSPARENT)
             isFocusable = true
             isFocusableInTouchMode = true
             setOnKeyListener { _, keyCode, _ -> keyCode != KeyEvent.KEYCODE_POWER }
         }
         val density = service.resources.displayMetrics.density
         val screenWidth = service.resources.displayMetrics.widthPixels
-        val row = LinearLayout(service).apply {
+        val column = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
+
+        // One full-width progress line at the very top. The split content starts below it.
+        progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = false
+            max = StudySettings.QUESTIONS
+            progressTintList = ColorStateList.valueOf(Color.rgb(47, 123, 255))
+            progressBackgroundTintList = ColorStateList.valueOf(Color.argb(90, 255, 255, 255))
+            minimumHeight = (5 * density).toInt().coerceAtLeast(3)
+        }
+        column.addView(progress, LinearLayout.LayoutParams(-1, (5 * density).toInt().coerceAtLeast(3)))
+
+        val content = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.BLACK)
+            setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (16 * density).toInt())
         }
 
-        // Left: everything a child must notice. Right: the exercise image alone.
+        // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
         val left = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((38 * density).toInt(), (24 * density).toInt(), (28 * density).toInt(), (24 * density).toInt())
-            setBackgroundColor(Color.rgb(18, 18, 22))
+            setPadding((34 * density).toInt(), (26 * density).toInt(), (26 * density).toInt(), (26 * density).toInt())
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.argb(234, 32, 32, 34), Color.argb(208, 24, 26, 31)),
+            ).apply {
+                cornerRadius = 28 * density
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(52, 255, 255, 255))
+            }
         }
         title = text(22f, Color.WHITE, Typeface.BOLD).apply {
             text = service.getString(R.string.study_title)
@@ -138,27 +156,17 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             setPadding(0, (8 * density).toInt(), 0, 0)
             visibility = View.INVISIBLE
         }
-        progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = false
-            max = StudySettings.QUESTIONS
-            progressTintList = ColorStateList.valueOf(Color.rgb(92, 164, 255))
-            progressBackgroundTintList = ColorStateList.valueOf(Color.rgb(49, 54, 66))
-            minimumHeight = (3 * density).toInt().coerceAtLeast(2)
-        }
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
         left.addView(status, LinearLayout.LayoutParams(-1, -2))
-        left.addView(progress, LinearLayout.LayoutParams(-1, (3 * density).toInt().coerceAtLeast(2)).apply {
-            topMargin = (10 * density).toInt()
-        })
 
-        val cueSize = (112 * density).toInt()
+        val cueSize = (88 * density).toInt()
         cue = ImageView(service).apply {
             setBackground(GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.argb(115, 0, 0, 0))
+                setColor(Color.argb(120, 0, 0, 0))
                 setStroke((2 * density).toInt().coerceAtLeast(2), Color.argb(150, 255, 255, 255))
             })
-            setPadding((22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt())
+            setPadding((18 * density).toInt(), (18 * density).toInt(), (18 * density).toInt(), (18 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
@@ -168,20 +176,26 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val imageStage = FrameLayout(service).apply {
-            setBackgroundColor(Color.BLACK)
-            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt())
+            setPadding((14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 24 * density
+                setColor(Color.argb(150, 0, 0, 0))
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(38, 255, 255, 255))
+            }
         }
         image = ImageView(service).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.TRANSPARENT)
         }
         imageStage.addView(image, FrameLayout.LayoutParams(-1, -1))
 
-        row.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f))
-        row.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
-        root.addView(row, FrameLayout.LayoutParams(-1, -1))
+        content.addView(left, LinearLayout.LayoutParams(0, -1, 0.30f).apply { rightMargin = (12 * density).toInt() })
+        content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.70f))
+        column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(column, FrameLayout.LayoutParams(-1, -1))
 
-        // Keep the cue in the left panel, so it can never cover the exercise image.
+        // Aerial pages use a translucent dark glass. Accessibility overlays cannot call Compose's
+        // liquidGlass, so use a translucent gradient with a lit rim and try native blur behind.
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -193,8 +207,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            dimAmount = 0.8f
+            dimAmount = 0.45f
             title = "Aerial study"
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+            lp.blurBehindRadius = (28 * density).toInt()
         }
         wm.addView(root, lp)
         root.requestFocus()
