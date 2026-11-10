@@ -84,7 +84,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var status: TextView
     private lateinit var cue: ImageView
     private lateinit var orb: StudyOrbView
-    private lateinit var wave: StudyWaveView
+    private lateinit var orbHolder: FrameLayout
     private lateinit var play: TextView
     private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
@@ -98,6 +98,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private var attempt = 0
     private var oldVolume = -1
     private var oldMute = false
+    private var wasPlaying = false
     private var hasFocus = false
 
     private val timeout = Runnable { if (!closed) retry("timeout") }
@@ -277,23 +278,18 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
         left.addView(promptRow, LinearLayout.LayoutParams(-1, -2))
 
-        val cueSize = (170 * density).toInt()
+        val cueSize = (150 * density).toInt()
         orb = StudyOrbView(service)
         cue = ImageView(service).apply {
-            setPadding((39 * density).toInt(), (39 * density).toInt(), (39 * density).toInt(), (39 * density).toInt())
+            setPadding((34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt(), (34 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
-        wave = StudyWaveView(service)
-        val orbHolder = FrameLayout(service).apply {
+        orbHolder = FrameLayout(service).apply {
             addView(orb, FrameLayout.LayoutParams(cueSize, cueSize))
             addView(cue, FrameLayout.LayoutParams(cueSize, cueSize))
         }
         val cueHolder = FrameLayout(service).apply {
-            addView(wave, FrameLayout.LayoutParams(-1, (58 * density).toInt(), Gravity.TOP).apply {
-                leftMargin = (30 * density).toInt()
-                rightMargin = (30 * density).toInt()
-            })
             addView(orbHolder, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
         left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -381,13 +377,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         if (::play.isInitialized) play.visibility = if (mode == Cue.READY) View.VISIBLE else View.GONE
         if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
-        val showWave = mode != Cue.LISTEN && mode != Cue.CHECK && mode != Cue.CROSS
-        wave.setActive(showWave)
-        wave.visibility = if (showWave) View.VISIBLE else View.INVISIBLE
         cueAnimator?.cancel()
         cue.rotation = 0f
-        cue.scaleX = 1f
-        cue.scaleY = 1f
+        orbHolder.scaleX = 1f
+        orbHolder.scaleY = 1f
         cue.alpha = 1f
         cueAnimator = when (mode) {
             Cue.PROCESS -> ValueAnimator.ofFloat(0f, 360f).apply {
@@ -400,8 +393,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 duration = 660
                 addUpdateListener {
                     val scale = it.animatedValue as Float
-                    cue.scaleX = scale
-                    cue.scaleY = scale
+                    orbHolder.scaleX = scale
+                    orbHolder.scaleY = scale
                 }
             }
             else -> ValueAnimator.ofFloat(1f, 1.16f).apply {
@@ -410,8 +403,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 repeatCount = ValueAnimator.INFINITE
                 addUpdateListener {
                     val scale = it.animatedValue as Float
-                    cue.scaleX = scale
-                    cue.scaleY = scale
+                    orbHolder.scaleX = scale
+                    orbHolder.scaleY = scale
                 }
             }
         }.also { it.start() }
@@ -455,7 +448,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         val q = s.questions.getOrNull(index) ?: return finish(false)
         stopSpeech()
         main.removeCallbacks(nextStep)
-        wave.setActive(false)
         progress.max = s.questions.size
         progress.progress = index + 1
         status.visibility = View.INVISIBLE
@@ -521,11 +513,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 status.visibility = View.VISIBLE
             }
 
-            override fun onRmsChanged(rmsdB: Float) {
-                if (!closed && generation == listenGeneration) {
-                    wave.setLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
-                }
-            }
+            override fun onRmsChanged(rmsdB: Float) {}
 
             override fun onBufferReceived(buffer: ByteArray?) {}
 
@@ -659,7 +647,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         main.removeCallbacks(pass)
         stopSpeech()
         hideCue()
-        wave.setActive(false)
         StudyVoice.stop()
         if (passed) StudySettings.resetWatch()
         main.post {
@@ -685,13 +672,19 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         listening = false
     }
 
+    private fun dispatchMediaKey(keyCode: Int) {
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode))
+        audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode))
+    }
+
     private fun pauseAudio() {
         runCatching {
             oldVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
             oldMute = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audio.isStreamMute(AudioManager.STREAM_MUSIC)
-            val event = android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE)
-            audio.dispatchMediaKeyEvent(event)
-            audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
+            // Only send PAUSE if something is actually playing; resuming a video the user had
+            // already paused would be worse than leaving it alone.
+            wasPlaying = audio.isMusicActive()
+            if (wasPlaying) dispatchMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE)
             @Suppress("DEPRECATION")
             hasFocus = audio.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) ==
                 AudioManager.AUDIOFOCUS_REQUEST_GRANTED
@@ -700,6 +693,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     }
 
     private fun restoreAudio() {
+        val resume = wasPlaying
+        wasPlaying = false
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (oldMute) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
@@ -714,6 +709,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             }
             oldVolume = -1
             hasFocus = false
+        }
+        if (resume) {
+            // Some players resume themselves when focus is released; give them a moment, then
+            // send PLAY only if nothing is playing. The key is routed to the active media session.
+            main.postDelayed({
+                if (!audio.isMusicActive()) dispatchMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
+            }, 350)
         }
     }
 
