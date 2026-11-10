@@ -86,7 +86,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var orb: StudyOrbView
     private lateinit var orbHolder: FrameLayout
     private lateinit var wave: StudyWaveView
-    private lateinit var play: TextView
     private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
     private enum class Cue { READY, LISTEN, SPEAK, PROCESS, CHECK, CROSS }
@@ -262,22 +261,12 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             maxWidth = (screenWidth * 0.24f).toInt()
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            setPadding(0, (8 * density).toInt(), 0, 0)
+            gravity = Gravity.CENTER_HORIZONTAL
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            setPadding(0, (6 * density).toInt(), 0, 0)
             visibility = View.INVISIBLE
         }
-        play = text(18f, Color.rgb(86, 220, 130), Typeface.BOLD).apply {
-            text = "▶"
-            visibility = View.GONE
-            setPadding(0, (8 * density).toInt(), (8 * density).toInt(), 0)
-        }
-        val promptRow = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        promptRow.addView(play, LinearLayout.LayoutParams(-2, -2))
-        promptRow.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
         left.addView(title, LinearLayout.LayoutParams(-1, -2))
-        left.addView(promptRow, LinearLayout.LayoutParams(-1, -2))
 
         val cueSize = (75 * density).toInt()
         orb = StudyOrbView(service)
@@ -298,7 +287,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             })
             addView(orbHolder, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
-        left.addView(cueHolder, LinearLayout.LayoutParams(-1, 0, 1f))
+        val centerBlock = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        centerBlock.addView(cueHolder, LinearLayout.LayoutParams(-1, (cueSize + (42 * density).toInt())))
+        centerBlock.addView(status, LinearLayout.LayoutParams(-1, -2))
+        left.addView(centerBlock, LinearLayout.LayoutParams(-1, 0, 1f))
         sadStar = ImageView(service).apply {
             setImageResource(R.drawable.study_cue_star_sad)
             visibility = View.GONE
@@ -381,7 +376,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             Cue.CROSS -> orb.solid(Color.rgb(255, 69, 58))
             else -> orb.blue()
         }
-        if (::play.isInitialized) play.visibility = if (mode == Cue.READY) View.VISIBLE else View.GONE
         if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
         val showWave = mode != Cue.LISTEN && mode != Cue.CHECK && mode != Cue.CROSS
         wave.setActive(showWave)
