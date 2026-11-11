@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -245,7 +246,7 @@ fun WallpaperSheet(
                     verticalAlignment = Alignment.Top,
                 ) {
                     Column(Modifier.weight(1f)) {
-                    Group { note ->
+                    Group(modifier = Modifier.heightIn(min = 212.dp)) { note ->
                         SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
                             ActionChip(
                                 if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
@@ -675,7 +676,7 @@ private fun SectionTitle(title: Int) {
  * sheet does not shift as focus moves.
  */
 @Composable
-private fun Group(note: String? = null, rows: @Composable ColumnScope.(note: (String?) -> Unit) -> Unit) {
+private fun Group(note: String? = null, modifier: Modifier = Modifier, rows: @Composable ColumnScope.(note: (String?) -> Unit) -> Unit) {
     var focusedNote by remember { mutableStateOf<String?>(null) }
     var inside by remember { mutableStateOf(false) }
     var height by remember { mutableStateOf(0f) }
@@ -697,6 +698,7 @@ private fun Group(note: String? = null, rows: @Composable ColumnScope.(note: (St
         Column(
             Modifier
                 .fillMaxWidth()
+                .then(modifier)
                 .smoothBackground(Color.White.copy(alpha = 0.05f), 16.dp)
                 .onFocusChanged { inside = it.hasFocus },
         ) { rows { focusedNote = it } }
