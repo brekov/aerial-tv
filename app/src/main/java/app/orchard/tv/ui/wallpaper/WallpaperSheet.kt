@@ -146,7 +146,6 @@ fun WallpaperSheet(
     var studyQr by remember { mutableStateOf<ImageBitmap?>(null) }
     var studyExpiresAt by remember { mutableLongStateOf(0L) }
     var studyRefresh by remember { mutableStateOf(0) }
-    var studyClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var showDaily by remember { mutableStateOf(false) }
     var showMimo by remember { mutableStateOf(false) }
     var showDuration by remember { mutableStateOf(false) }
@@ -166,12 +165,16 @@ fun WallpaperSheet(
             runCatching { java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli() }.getOrNull()
         } ?: 0L
         studyQr = upload?.url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
-        studyClock = System.currentTimeMillis()
     }
     LaunchedEffect(visible, studyExpiresAt) {
+        // Refresh automatically once the current token expires; the QR/card stay in place.
         while (visible && studyExpiresAt > 0L) {
-            studyClock = System.currentTimeMillis()
-            delay(1_000)
+            val remaining = studyExpiresAt - System.currentTimeMillis()
+            if (remaining <= 0L) {
+                studyRefresh++
+                break
+            }
+            delay(remaining.coerceAtMost(1_000L))
         }
     }
 
@@ -281,14 +284,7 @@ fun WallpaperSheet(
                         }
                     }
                     }
-                    StudyQrCard(
-                        studyUploadUrl,
-                        studyQr,
-                        studyExpiresAt,
-                        studyClock,
-                        onRefresh = { studyRefresh++ },
-                        modifier = Modifier.width(190.dp).height(212.dp),
-                    )
+                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp).height(212.dp))
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -886,18 +882,7 @@ private fun PhoneCard(url: String?, qr: ImageBitmap?) {
 
 /** Parent upload QR under the Study section; the Aerial personalization QR stays on the sheet's right. */
 @Composable
-private fun StudyQrCard(
-    url: String?,
-    qr: ImageBitmap?,
-    expiresAt: Long,
-    now: Long,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val remaining = if (expiresAt <= 0L) "" else {
-        val seconds = ((expiresAt - now) / 1000L).coerceAtLeast(0L)
-        "%02d:%02d".format(seconds / 60, seconds % 60)
-    }
+private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Modifier) {
     Column(modifier.padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(132.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
@@ -911,19 +896,13 @@ private fun StudyQrCard(
         }
         Spacer(Modifier.height(8.dp))
         BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
-        Spacer(Modifier.height(4.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (remaining.isNotEmpty()) {
-                BasicText(
-                    stringResource(R.string.study_phone_expires, remaining),
-                    style = Type.Caption.copy(color = if (remaining == "00:00") Color(0xFFFF8A80) else Palette.SecondaryLabel),
-                )
-            }
-            ActionChip(stringResource(R.string.study_phone_refresh_short), Glyph.Download, onRefresh)
+        // Expiry is handled automatically; no countdown or refresh control here.
+        if (url == null) {
+            Spacer(Modifier.height(4.dp))
+            BasicText(
+                stringResource(R.string.wp_phone_offline),
+                style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+            )
         }
     }
 }
