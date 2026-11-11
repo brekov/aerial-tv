@@ -21,9 +21,11 @@ from .materials import (
 )
 from .providers import (
     ProviderError,
+    generate_choice_questions,
     generate_word_image_questions,
     get_provider_config,
 )
+from .taxonomy import question_type
 from .questions import QuestionError, create_question, question_admin_dict
 from .util import iso, json_dumps, new_id, redact, safe_json_loads, utcnow
 
@@ -53,20 +55,26 @@ class GenerationService:
     def create_job(
         self,
         *,
-        material_id: str,
+        material_id: str | None,
         provider: str | None = None,
         lang: str = "zh",
         count: int = 5,
         requested_by: str = "admin",
+        question_type_code: str = "word_image",
+        age_group_id: int | None = None,
+        subject_id: int | None = None,
+        answer_mode: str | None = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        material = get_image_material(self.settings, str(material_id))
-        if not material:
-            raise GenerationError("image material not found", status_code=404)
-        if material["kind"] != "image":
-            raise GenerationError(
-                "only image materials can be used for word_image generation",
-                status_code=400,
-            )
+        type_info = question_type(self.settings, question_type_code)
+        if not type_info:
+            raise GenerationError("unknown question type", status_code=400)
+        requires_image = bool(type_info.get("requires_image")) or question_type_code == "word_image"
+        material = get_image_material(self.settings, str(material_id)) if material_id else None
+        if requires_image and not material:
+            raise GenerationError("this question type requires an image material", status_code=400)
+        if material and material["kind"] != "image":
+            raise GenerationError("material must be an image", status_code=400)
         lang = (lang or "zh").strip().lower()
         if lang not in {"zh", "en"}:
             raise GenerationError("lang must be 'zh' or 'en'", status_code=400)
@@ -75,9 +83,8 @@ class GenerationService:
         except (TypeError, ValueError):
             raise GenerationError("count must be an integer", status_code=400) from None
         count = max(1, min(count, 20))
-        # A word-image card already carries exactly one target word. Generating several
-        # questions from the same card would repeat the same flashcard; keep one.
-        count = 1
+        if question_type_code in {"word_image", "word_image_choice"}:
+            count = min(count, 1) if question_type_code == "word_image" else count
 
         provider_name = (provider or "").strip().lower()
         try:
@@ -102,14 +109,16 @@ class GenerationService:
                 INSERT INTO generation_jobs(
                     id, provider, model, material_id, kind, lang, count,
                     status, error, result_json, requested_by, created_at,
-                    started_at, finished_at)
-                VALUES(?, ?, ?, ?, 'word_image', ?, ?, ?, ?, '{}', ?, ?, ?, ?)
+                    started_at, finished_at, question_type, age_group_id,
+                    subject_id, answer_mode, params_json)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
                     provider_name,
                     config.model,
-                    material["sha256"],
+                    material["sha256"] if material else None,
+                    question_type_code,
                     lang,
                     count,
                     status_value,
@@ -118,6 +127,11 @@ class GenerationService:
                     now,
                     now if status_value == "failed" else None,
                     now if status_value == "failed" else None,
+                    question_type_code,
+                    age_group_id,
+                    subject_id,
+                    answer_mode or type_info.get("answer_mode") or "voice",
+                    json_dumps(params or {}),
                 ),
             )
         if status_value == "failed":
@@ -144,27 +158,51 @@ class GenerationService:
                 (started_at, job_id),
             )
         try:
-            material = get_image_material(self.settings, str(job["materialId"]))
-            if not material:
-                raise GenerationError("image material disappeared", status_code=410)
-            image_bytes = read_material_bytes(self.settings, material)
-            items, config = generate_word_image_questions(
-                self.settings,
-                provider_name=job["provider"],
-                image_bytes=image_bytes,
-                mime_type=material["content_type"],
-                lang=job["lang"],
-                count=int(job["count"]),
-            )
+            material = get_image_material(self.settings, str(job["materialId"])) if job.get("materialId") else None
+            type_code = job.get("questionType") or "word_image"
+            type_info = question_type(self.settings, type_code) or {}
+            image_bytes = read_material_bytes(self.settings, material) if material else None
+            age_label = subject_label = ""
+            with read_session(self.settings) as conn:
+                if job.get("ageGroupId"):
+                    row = conn.execute("SELECT name FROM age_groups WHERE id = ?", (job["ageGroupId"],)).fetchone()
+                    age_label = row["name"] if row else ""
+                if job.get("subjectId"):
+                    row = conn.execute("SELECT name FROM subjects WHERE id = ?", (job["subjectId"],)).fetchone()
+                    subject_label = row["name"] if row else ""
+            if type_code == "word_image" and material:
+                items, config = generate_word_image_questions(
+                    self.settings,
+                    provider_name=job["provider"],
+                    image_bytes=image_bytes or b"",
+                    mime_type=material["content_type"],
+                    lang=job["lang"],
+                    count=int(job["count"]),
+                )
+            else:
+                items, config = generate_choice_questions(
+                    self.settings,
+                    provider_name=job["provider"],
+                    question_type=type_code,
+                    lang=job["lang"],
+                    count=int(job["count"]),
+                    age_label=age_label,
+                    subject_label=subject_label,
+                    image_bytes=image_bytes,
+                    mime_type=(material or {}).get("content_type", ""),
+                    material_title=(material or {}).get("title", ""),
+                )
             created: list[dict[str, Any]] = []
             for item in items:
+                options = item.get("options") or []
                 question = create_question(
                     self.settings,
                     prompt=item["prompt"],
                     answer=item["answer"],
-                    question_type="word_image",
+                    question_type=type_code,
                     lang=job["lang"],
-                    image_id=material["sha256"],
+                    image_id=(material or {}).get("sha256"),
+                    options=options,
                     explanation=item.get("explanation", ""),
                     difficulty=item.get("difficulty", 1),
                     status_value="draft",
@@ -174,6 +212,9 @@ class GenerationService:
                         "provider": config.name,
                         "model": config.model,
                     },
+                    age_group_id=job.get("ageGroupId"),
+                    subject_id=job.get("subjectId"),
+                    answer_mode=type_info.get("answer_mode") or job.get("answerMode") or "voice",
                     changed_by=f"ai:{config.name}",
                     change_note=f"generated by {config.name}/{config.model}",
                 )
@@ -255,6 +296,11 @@ def _job_dict(row: Any) -> dict[str, Any]:
         "error": row["error"],
         "result": result,
         "questionIds": result.get("questionIds", []),
+        "questionType": row["question_type"],
+        "ageGroupId": row["age_group_id"],
+        "subjectId": row["subject_id"],
+        "answerMode": row["answer_mode"],
+        "params": safe_json_loads(row["params_json"], {}),
         "requestedBy": row["requested_by"],
         "createdAt": row["created_at"],
         "startedAt": row["started_at"],

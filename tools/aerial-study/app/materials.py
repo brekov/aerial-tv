@@ -92,19 +92,24 @@ def get_material_by_id(settings: Settings, material_id: int) -> dict[str, Any] |
 
 
 def list_materials(
-    settings: Settings, kind: str | None = None, limit: int = 100
+    settings: Settings,
+    kind: str | None = None,
+    limit: int = 100,
+    category_id: int | None = None,
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    source: str | None = None,
 ) -> list[dict[str, Any]]:
     limit = max(1, min(limit, 500))
+    where: list[str] = []
+    args: list[Any] = []
+    for column, value in (("kind", kind), ("category_id", category_id), ("age_group_id", age_group_id), ("subject_id", subject_id), ("source", source)):
+        if value is not None:
+            where.append(f"{column} = ?")
+            args.append(value)
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
     with read_session(settings) as conn:
-        if kind:
-            rows = conn.execute(
-                "SELECT * FROM materials WHERE kind = ? ORDER BY id DESC LIMIT ?",
-                (kind, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM materials ORDER BY id DESC LIMIT ?", (limit,)
-            ).fetchall()
+        rows = conn.execute(f"SELECT * FROM materials {clause} ORDER BY id DESC LIMIT ?", [*args, limit]).fetchall()
         return [dict(row) for row in rows]
 
 
@@ -134,6 +139,11 @@ def save_material(
     data: bytes,
     title: str = "",
     meta: dict[str, Any] | None = None,
+    category_id: int | None = None,
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    source: str = "upload",
+    source_path: str = "",
 ) -> tuple[dict[str, Any], bool]:
     """Store an uploaded material, returning ``(row, created)``.
 
@@ -170,8 +180,9 @@ def save_material(
             """
             INSERT INTO materials(sha256, kind, title, filename, content_type,
                                   size_bytes, rel_path, status, meta_json,
+                                  category_id, age_group_id, subject_id, source, source_path,
                                   created_at, updated_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+            VALUES(?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 digest,
@@ -182,6 +193,11 @@ def save_material(
                 len(data),
                 rel_path,
                 json_dumps(meta or {}),
+                category_id,
+                age_group_id,
+                subject_id,
+                source,
+                source_path,
                 now,
                 now,
             ),
@@ -223,6 +239,11 @@ def material_public_dict(
         "contentType": material["content_type"],
         "sizeBytes": material["size_bytes"],
         "url": url,
+        "categoryId": material.get("category_id"),
+        "ageGroupId": material.get("age_group_id"),
+        "subjectId": material.get("subject_id"),
+        "source": material.get("source", "upload"),
+        "sourcePath": material.get("source_path", ""),
         "createdAt": material["created_at"],
     }
 

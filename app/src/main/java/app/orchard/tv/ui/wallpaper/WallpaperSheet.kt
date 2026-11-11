@@ -96,6 +96,7 @@ import app.orchard.tv.ui.theme.Palette
 import app.orchard.tv.ui.theme.Type
 import app.orchard.tv.wallpaper.DailySource
 import app.orchard.tv.wallpaper.PhoneServer
+import app.orchard.tv.study.StudyClient
 import app.orchard.tv.study.StudyOverlay
 import app.orchard.tv.study.StudySettings
 import app.orchard.tv.study.StudyWatch
@@ -139,6 +140,8 @@ fun WallpaperSheet(
     val context = LocalContext.current
     var phoneUrl by remember { mutableStateOf<String?>(null) }
     var qr by remember { mutableStateOf<ImageBitmap?>(null) }
+    var studyUploadUrl by remember { mutableStateOf<String?>(null) }
+    var studyQr by remember { mutableStateOf<ImageBitmap?>(null) }
     var showDaily by remember { mutableStateOf(false) }
     var showMimo by remember { mutableStateOf(false) }
 
@@ -151,6 +154,9 @@ fun WallpaperSheet(
         val url = withContext(Dispatchers.IO) { PhoneServer.start(context) }
         phoneUrl = url
         qr = url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
+        val upload = withContext(Dispatchers.IO) { StudyClient.createUploadToken() }
+        studyUploadUrl = upload
+        studyQr = upload?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
     }
 
     val shown = remember { MutableTransitionState(false) }
@@ -431,7 +437,7 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(24.dp))
             }
             Spacer(Modifier.width(28.dp))
-            PhoneCard(phoneUrl, qr)
+            PhoneCard(phoneUrl, qr, studyUploadUrl, studyQr)
         }
     }
 
@@ -801,29 +807,48 @@ private fun ScreensaverChoice(onStart: () -> Unit) {
 }
 
 @Composable
-private fun PhoneCard(url: String?, qr: ImageBitmap?) {
+private fun PhoneCard(
+    aerialUrl: String?,
+    aerialQr: ImageBitmap?,
+    studyUrl: String?,
+    studyQr: ImageBitmap?,
+) {
+    // The right column is the parent's phone entry point. Prefer the Study material upload page;
+    // fall back to Aerial's local personalization page when the NAS is offline.
+    val usingStudy = studyQr != null
+    val shownQr = studyQr ?: aerialQr
+    val shownUrl = if (usingStudy) studyUrl else aerialUrl
     Column(Modifier.width(220.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(176.dp).smoothBackground(Color.White, 18.dp).padding(14.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (qr != null) {
-                Image(qr, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
+            if (shownQr != null) {
+                Image(shownQr, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
             } else {
                 GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 40.dp)
             }
         }
         Spacer(Modifier.height(14.dp))
-        BasicText(stringResource(R.string.wp_phone_title), style = Type.Headline)
+        BasicText(
+            stringResource(if (usingStudy) R.string.study_phone_title else R.string.wp_phone_title),
+            style = Type.Headline,
+        )
         Spacer(Modifier.height(4.dp))
         BasicText(
-            stringResource(if (url != null) R.string.wp_phone_body else R.string.wp_phone_offline),
+            stringResource(
+                if (usingStudy) R.string.study_phone_body
+                else if (aerialUrl != null) R.string.wp_phone_body else R.string.wp_phone_offline
+            ),
             style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
         )
-        if (url != null) {
+        if (shownUrl != null) {
             Spacer(Modifier.height(6.dp))
-            // The whole address, token and all, to type into a computer's browser.
-            BasicText(url.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+            BasicText(shownUrl.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+        }
+        if (usingStudy && aerialUrl != null) {
+            Spacer(Modifier.height(5.dp))
+            BasicText(aerialUrl.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
         }
     }
 }

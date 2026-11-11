@@ -25,6 +25,15 @@ from .materials import (
     list_materials,
     save_material,
 )
+from .material_scan import ScanError, scan_directory
+from .taxonomy import (
+    TaxonomyError,
+    all_taxonomy,
+    create_item,
+    update_item,
+    update_question_type,
+)
+from .upload_tokens import create_token
 from .providers import (
     PROVIDER_NAMES,
     provider_status,
@@ -39,9 +48,10 @@ from .questions import (
     question_admin_dict,
     revision_admin_dict,
     set_status,
+    soft_delete_question,
     update_question,
 )
-from .sessions import list_sessions, session_detail
+from .sessions import list_sessions, question_attempts, session_detail, wrong_questions
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -66,6 +76,9 @@ class QuestionCreateRequest(BaseModel):
     difficulty: int = 1
     status: str = "draft"
     meta: dict[str, Any] | None = None
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    answerMode: str | None = None
 
 
 class QuestionUpdateRequest(BaseModel):
@@ -79,6 +92,9 @@ class QuestionUpdateRequest(BaseModel):
     difficulty: int | None = None
     status: str | None = None
     meta: dict[str, Any] | None = None
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    answerMode: str | None = None
     changeNote: str | None = None
 
 
@@ -88,10 +104,16 @@ class QuestionStatusRequest(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    materialId: str
+    materialId: str | None = None
+    materialIds: list[str] | None = None
+    questionType: str = "word_image"
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    answerMode: str | None = None
     provider: str | None = None
     lang: str = "zh"
     count: int = Field(default=5, ge=1, le=20)
+    params: dict[str, Any] | None = None
 
 
 class ProviderUpdateRequest(BaseModel):
@@ -103,6 +125,40 @@ class ProviderUpdateRequest(BaseModel):
 class ProviderSettingsRequest(BaseModel):
     defaultProvider: str | None = None
     aiJudgeEnabled: bool | None = None
+
+
+class TaxonomyItemRequest(BaseModel):
+    code: str | None = None
+    name: str | None = None
+    parentId: int | None = None
+    sortOrder: int | None = None
+    active: bool | None = None
+
+
+class QuestionTypeUpdateRequest(BaseModel):
+    name: str | None = None
+    answerMode: str | None = None
+    requiresImage: bool | None = None
+    requiresMaterial: bool | None = None
+    minOptions: int | None = None
+    maxOptions: int | None = None
+    active: bool | None = None
+
+
+class ScanRequest(BaseModel):
+    root: str
+    categoryId: int | None = None
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    recursive: bool = True
+
+
+class UploadTokenRequest(BaseModel):
+    categoryId: int | None = None
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    maxUploads: int = 10
+    minutes: int = 10
 
 
 # ---------------------------------------------------------------------------
@@ -139,13 +195,116 @@ def stats(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
 def get_materials(
     kind: str | None = None,
     limit: int = 100,
+    categoryId: int | None = None,
+    ageGroupId: int | None = None,
+    subjectId: int | None = None,
+    source: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     items = [
         admin_material_dict(settings, material)
-        for material in list_materials(settings, kind=kind, limit=limit)
+        for material in list_materials(
+            settings, kind=kind, limit=limit, category_id=categoryId,
+            age_group_id=ageGroupId, subject_id=subjectId, source=source,
+        )
     ]
     return {"items": items}
+
+
+@router.get("/taxonomies")
+def get_taxonomies(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return all_taxonomy(settings)
+
+
+@router.post("/age-groups", status_code=201)
+def create_age_group(payload: TaxonomyItemRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": create_item(settings, "age-groups", payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.patch("/age-groups/{item_id}")
+def patch_age_group(item_id: int, payload: TaxonomyItemRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": update_item(settings, "age-groups", item_id, payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.post("/subjects", status_code=201)
+def create_subject(payload: TaxonomyItemRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": create_item(settings, "subjects", payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.patch("/subjects/{item_id}")
+def patch_subject(item_id: int, payload: TaxonomyItemRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": update_item(settings, "subjects", item_id, payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.post("/material-categories", status_code=201)
+def create_category(payload: TaxonomyItemRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": create_item(settings, "material-categories", payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.patch("/material-categories/{item_id}")
+def patch_category(item_id: int, payload: TaxonomyItemRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": update_item(settings, "material-categories", item_id, payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.patch("/question-types/{code}")
+def patch_question_type(code: str, payload: QuestionTypeUpdateRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return {"item": update_question_type(settings, code, payload.model_dump(exclude_unset=True))}
+    except TaxonomyError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.post("/upload-tokens")
+def create_upload_token(payload: UploadTokenRequest, request: Request, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    base = settings.public_base_url or str(request.base_url).rstrip("/")
+    try:
+        token = create_token(
+            settings,
+            category_id=payload.categoryId,
+            age_group_id=payload.ageGroupId,
+            subject_id=payload.subjectId,
+            created_by="admin",
+            base_url=base,
+            max_uploads=payload.maxUploads,
+            minutes=payload.minutes,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=getattr(exc, "status_code", 422), detail=getattr(exc, "message", str(exc))) from exc
+    return {"token": token}
+
+
+@router.post("/materials/scan")
+def scan_materials(payload: ScanRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        return scan_directory(
+            settings,
+            root=payload.root,
+            category_id=payload.categoryId,
+            age_group_id=payload.ageGroupId,
+            subject_id=payload.subjectId,
+            recursive=payload.recursive,
+        )
+    except (ScanError, Exception) as exc:
+        code = getattr(exc, "status_code", 400)
+        raise HTTPException(status_code=code, detail=getattr(exc, "message", str(exc))) from exc
 
 
 @router.post("/materials", status_code=201)
@@ -182,6 +341,9 @@ def get_questions(
     type: str | None = None,
     lang: str | None = None,
     search: str | None = None,
+    ageGroupId: int | None = None,
+    subjectId: int | None = None,
+    answerMode: str | None = None,
     limit: int = 50,
     offset: int = 0,
     settings: Settings = Depends(get_settings),
@@ -192,6 +354,9 @@ def get_questions(
         question_type=type,
         lang=lang,
         search=search,
+        age_group_id=ageGroupId,
+        subject_id=subjectId,
+        answer_mode=answerMode,
         limit=limit,
         offset=offset,
     )
@@ -221,10 +386,19 @@ def create_question_endpoint(
         status_value=payload.status,
         source="manual",
         meta=payload.meta,
+        age_group_id=payload.ageGroupId,
+        subject_id=payload.subjectId,
+        answer_mode=payload.answerMode,
         changed_by="admin",
         change_note="created in admin",
     )
     return {"question": question_admin_dict(settings, question)}
+
+
+@router.delete("/questions/{question_id}", status_code=204)
+def delete_question_endpoint(question_id: int, settings: Settings = Depends(get_settings)) -> Response:
+    soft_delete_question(settings, question_id)
+    return Response(status_code=204)
 
 
 @router.get("/questions/{question_id}")
@@ -310,6 +484,46 @@ def get_sessions(
     return {"items": items, "total": total}
 
 
+@router.get("/wrong-questions")
+def get_wrong_questions(
+    ageGroupId: int | None = None,
+    subjectId: int | None = None,
+    type: str | None = None,
+    minWrong: int = 1,
+    limit: int = 100,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    return {
+        "items": wrong_questions(
+            settings,
+            age_group_id=ageGroupId,
+            subject_id=subjectId,
+            question_type_code=type,
+            min_wrong=minWrong,
+            limit=limit,
+        )
+    }
+
+
+@router.get("/records")
+def get_records(limit: int = 50, offset: int = 0, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    items, total = list_sessions(settings, limit=limit, offset=offset)
+    return {"items": items, "total": total}
+
+
+@router.get("/records/{session_id}")
+def get_record(session_id: str, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    detail = session_detail(settings, session_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="record not found")
+    return detail
+
+
+@router.get("/questions/{question_id}/attempts")
+def get_question_attempts(question_id: int, limit: int = 100, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return {"items": question_attempts(settings, question_id, limit=limit)}
+
+
 @router.get("/sessions/{session_id}")
 def get_session_detail(
     session_id: str, settings: Settings = Depends(get_settings)
@@ -332,12 +546,18 @@ def trigger_generation(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     service: GenerationService = request.app.state.generation
+    material_id = payload.materialId or (payload.materialIds[0] if payload.materialIds else None)
     job = service.create_job(
-        material_id=payload.materialId,
+        material_id=material_id,
         provider=payload.provider,
         lang=payload.lang,
         count=payload.count,
         requested_by="admin",
+        question_type_code=payload.questionType,
+        age_group_id=payload.ageGroupId,
+        subject_id=payload.subjectId,
+        answer_mode=payload.answerMode,
+        params=payload.params,
     )
     return {"job": job}
 

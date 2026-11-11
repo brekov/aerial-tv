@@ -115,6 +115,7 @@ class Settings:
     ai_judge_enabled: bool = False
 
     public_base_url: str = ""
+    scan_roots: str = ""
     log_level: str = "INFO"
     generation_inline: bool = False
     version: str = "0.1.0"
@@ -164,6 +165,7 @@ class Settings:
             default_provider=_env("AI_PROVIDER", "deepseek") or "deepseek",
             ai_judge_enabled=_env_bool("AI_JUDGE_ENABLED", False),
             public_base_url=_env("PUBLIC_BASE_URL").rstrip("/"),
+            scan_roots=_env("STUDY_SCAN_ROOTS", ""),
             log_level=_env("LOG_LEVEL", "INFO") or "INFO",
             generation_inline=_env_bool("GENERATION_INLINE", False),
             version=_env("STUDY_VERSION", "0.1.0") or "0.1.0",

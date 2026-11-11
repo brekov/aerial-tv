@@ -108,6 +108,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(api_public.router)
     app.include_router(api_admin.router)
+    admin_assets = Path(__file__).parent / "static" / "admin" / "assets"
+    if admin_assets.is_dir():
+        app.mount("/admin/assets", StaticFiles(directory=str(admin_assets)), name="admin-assets")
     app.include_router(web_admin.router)
     app.mount(
         "/static",

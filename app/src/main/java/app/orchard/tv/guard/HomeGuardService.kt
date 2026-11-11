@@ -1224,7 +1224,14 @@ class HomeGuardService : AccessibilityService() {
         keySeen = true
         // The study quiz owns every key but power: no Home, Back, voice/assistant key or app switch
         // may leave it. Voice assistant windows are also dismissed in onAccessibilityEvent.
-        if (StudyOverlay.active) return event.keyCode != KeyEvent.KEYCODE_POWER
+        if (StudyOverlay.active) {
+            if (StudyOverlay.choiceActive && event.keyCode in setOf(
+                    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                )) return false
+            return event.keyCode != KeyEvent.KEYCODE_POWER
+        }
         if (!GuardSetup.isUserUnlocked(this)) return false
         if (event.keyCode in VOLUME_KEYS) {
             return if (filteringForCecOnly || (isDefaultHome() && defaultHomeNeedsHomeFilter)) {

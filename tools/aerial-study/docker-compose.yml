@@ -13,6 +13,8 @@ services:
     volumes:
       # NAS deployment path from the Aerial Study Guard design.
       - /vol2/1000/study:/data
+      # Optional NAS directory for the admin directory scanner.
+      - ${STUDY_SCAN_HOST:-/vol2/1000/study/inbox}:/data/inbox
     environment:
       # Compose reads .env in this directory for interpolation.  Keys below are
       # passed explicitly so `docker compose config` is reviewable.
@@ -52,6 +54,7 @@ services:
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      STUDY_SCAN_ROOTS: ${STUDY_SCAN_ROOTS:-/data/inbox}
     healthcheck:
       test:
         - CMD

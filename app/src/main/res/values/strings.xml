@@ -377,4 +377,8 @@
 请再试一次，注意发音哦~</string>
     <string name="study_next_auto">下一题将自动开始…</string>
     <string name="study_voice_listen_word">Listen to the word, then repeat it.</string>
+    <string name="study_phone_title">Upload learning material</string>
+    <string name="study_phone_body">Scan with your phone to upload pictures to the NAS Study library.</string>
+    <string name="study_phone_tv">TV settings</string>
+    <string name="study_choice_prompt">Choose an answer</string>
 </resources>

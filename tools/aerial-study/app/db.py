@@ -14,10 +14,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from .config import Settings
+from .migrations import migrate_v2
 from .util import iso, json_dumps, safe_json_loads, utcnow
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _connect(settings: Settings) -> sqlite3.Connection:
@@ -72,6 +72,8 @@ def init_db(settings: Settings) -> None:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(script)
         current = conn.execute("PRAGMA user_version").fetchone()[0]
+        if current < 2:
+            migrate_v2(conn, iso(utcnow()))
         if current < SCHEMA_VERSION:
             conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         conn.commit()

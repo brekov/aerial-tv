@@ -424,3 +424,78 @@ def judge_answer_ai(
     except ProviderError:
         return None
     return raw.strip().upper().startswith("YES")
+
+
+def generate_choice_questions(
+    settings: Settings,
+    *,
+    provider_name: str | None,
+    question_type: str,
+    lang: str,
+    count: int,
+    age_label: str = "",
+    subject_label: str = "",
+    image_bytes: bytes | None = None,
+    mime_type: str = "",
+    material_title: str = "",
+) -> tuple[list[dict[str, Any]], ProviderConfig]:
+    """Generate choice/math questions as drafts.  Image is optional."""
+    config = get_provider_config(settings, provider_name)
+    lang_name = "Chinese" if lang == "zh" else "English"
+    image_hint = (
+        "The attached image is the exercise source. Read the big target content, ignore headers/footers."
+        if image_bytes
+        else "Use the supplied source text/title as the source; do not invent unrelated facts."
+    )
+    prompt = (
+        f"Create {count} children's quiz questions in {lang_name}.\n"
+        f"Question type: {question_type}. Age/level: {age_label or 'general'}. "
+        f"Subject: {subject_label or 'general'}. Source title: {material_title or 'none'}.\n"
+        f"{image_hint}\n"
+        "Each question must be a JSON object with: prompt, options (2-4 short choices), "
+        "answer (exactly one option), explanation, difficulty (1-5), lang.\n"
+        "Do not put the answer in the prompt. Do not use markdown.\n"
+        'Return {"questions":[...]} only.'
+    )
+    content: Any = [{"type": "text", "text": prompt}]
+    if image_bytes:
+        encoded = base64.b64encode(image_bytes).decode("ascii")
+        content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}})
+    messages = [
+        {"role": "system", "content": "You create strict JSON quiz content for children."},
+        {"role": "user", "content": content if image_bytes else prompt},
+    ]
+    raw = _chat(config, messages, temperature=0.4)
+    data = _extract_json(raw)
+    items = data.get("questions") if isinstance(data, dict) else data
+    if isinstance(data, dict) and "prompt" in data:
+        items = [data]
+    if not isinstance(items, list):
+        raise ProviderError("AI reply did not contain questions")
+    out: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        prompt_text = str(item.get("prompt") or "").strip()
+        answer = str(item.get("answer") or "").strip()
+        options = item.get("options") or []
+        if not prompt_text or not answer or not isinstance(options, list):
+            continue
+        options = [str(value).strip() for value in options if str(value).strip()]
+        # Keep a valid single-answer choice; refuse malformed AI output.
+        if not 2 <= len(options) <= 4 or len(set(options)) != len(options):
+            continue
+        if answer not in options:
+            continue
+        out.append({
+            "prompt": prompt_text,
+            "answer": answer,
+            "options": options,
+            "explanation": str(item.get("explanation") or "").strip(),
+            "difficulty": item.get("difficulty", 1),
+        })
+        if len(out) >= count:
+            break
+    if not out:
+        raise ProviderError("AI reply contained no valid choice questions")
+    return out, config

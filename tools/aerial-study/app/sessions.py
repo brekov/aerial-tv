@@ -16,7 +16,7 @@ from .questions import (
     question_public_dict,
     select_active_questions,
 )
-from .util import iso, json_dumps, new_id, parse_iso, safe_json_loads, utcnow
+from .util import iso, json_dumps, new_id, normalize_answer, parse_iso, safe_json_loads, split_accepted_answers, utcnow
 
 
 class SessionError(Exception):
@@ -30,16 +30,31 @@ def _now() -> str:
     return iso(utcnow())
 
 
-def create_session(settings: Settings, *, device_id: str = "") -> dict[str, Any]:
-    active_count = count_active(settings)
-    needed = settings.questions_per_session
-    if active_count < needed:
+def create_session(
+    settings: Settings,
+    *,
+    device_id: str = "",
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    answer_mode: str | None = None,
+    question_type_code: str | None = None,
+    count: int | None = None,
+) -> dict[str, Any]:
+    needed = max(1, min(int(count or settings.questions_per_session), settings.questions_per_session))
+    selected = select_active_questions(
+        settings,
+        needed,
+        age_group_id=age_group_id,
+        subject_id=subject_id,
+        answer_mode=answer_mode,
+        question_type_code=question_type_code,
+    )
+    if len(selected) < needed:
         raise SessionError(
-            f"not enough active questions: need {needed}, have {active_count}; "
+            f"not enough matching active questions: need {needed}, have {len(selected)}; "
             "activate questions in the admin page first",
             status_code=409,
         )
-    selected = select_active_questions(settings, needed)
     question_ids = [question["id"] for question in selected]
     session_id = new_id()
     now = utcnow()
@@ -161,6 +176,7 @@ def submit_answer(
     question_id: int,
     transcript: str,
     audio: bytes | None = None,
+    selected_option: int | None = None,
     allow_ai_judge: bool = True,
 ) -> dict[str, Any]:
     row = load_session(settings, session_id)
@@ -180,12 +196,21 @@ def submit_answer(
     if not question:
         raise SessionError("question no longer exists", status_code=410)
 
-    correct, judge_method, judge_detail = judge_transcript(
-        settings,
-        question,
-        transcript,
-        allow_ai=allow_ai_judge,
-    )
+    if question.get("answer_mode") == "choice":
+        options = safe_json_loads(question.get("options_json"), [])
+        if selected_option is None or not isinstance(selected_option, int) or not 0 <= selected_option < len(options):
+            raise SessionError("a valid selectedOption is required for this question", status_code=422)
+        accepted = split_accepted_answers(str(question.get("answer") or ""))
+        correct = normalize_answer(str(options[selected_option])) in {normalize_answer(item) for item in accepted}
+        judge_method = "choice"
+        judge_detail = {"selectedOption": selected_option, "selectedText": options[selected_option], "score": 100 if correct else 0}
+    else:
+        correct, judge_method, judge_detail = judge_transcript(
+            settings,
+            question,
+            transcript,
+            allow_ai=allow_ai_judge,
+        )
     score = int(judge_detail.get("score") or 0)
 
     audio_result: dict[str, Any] | None = None
@@ -379,3 +404,56 @@ def session_detail(settings: Settings, session_id: str) -> dict[str, Any] | None
 def count_sessions(settings: Settings) -> int:
     with read_session(settings) as conn:
         return conn.execute("SELECT COUNT(*) FROM quiz_sessions").fetchone()[0]
+
+
+def wrong_questions(
+    settings: Settings,
+    *,
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    question_type_code: str | None = None,
+    min_wrong: int = 1,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    where = ["q.deleted_at IS NULL"]
+    args: list[Any] = []
+    for column, value in (("q.age_group_id", age_group_id), ("q.subject_id", subject_id), ("q.type", question_type_code)):
+        if value is not None:
+            where.append(f"{column} = ?")
+            args.append(value)
+    args.extend([max(1, int(min_wrong)), max(1, min(int(limit), 500))])
+    with read_session(settings) as conn:
+        rows = conn.execute(
+            f"""
+            SELECT q.id AS question_id, q.prompt, q.answer, q.type, q.answer_mode,
+                   q.age_group_id, q.subject_id, q.difficulty,
+                   COUNT(a.id) AS total_attempts,
+                   SUM(CASE WHEN a.correct = 0 THEN 1 ELSE 0 END) AS wrong_attempts,
+                   MAX(CASE WHEN a.correct = 0 THEN a.created_at ELSE NULL END) AS last_wrong_at
+            FROM quiz_attempts a
+            JOIN questions q ON q.id = a.question_id
+            WHERE {' AND '.join(where)}
+            GROUP BY q.id
+            HAVING wrong_attempts >= ?
+            ORDER BY wrong_attempts DESC, last_wrong_at DESC
+            LIMIT ?
+            """,
+            [*args[:-2], args[-2], args[-1]],
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        total = int(item["total_attempts"] or 0)
+        wrong = int(item["wrong_attempts"] or 0)
+        item["wrongRate"] = round(wrong / total, 3) if total else 0.0
+        result.append(item)
+    return result
+
+
+def question_attempts(settings: Settings, question_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    with read_session(settings) as conn:
+        rows = conn.execute(
+            "SELECT * FROM quiz_attempts WHERE question_id = ? ORDER BY id DESC LIMIT ?",
+            (question_id, max(1, min(int(limit), 500))),
+        ).fetchall()
+        return [dict(row) for row in rows]

@@ -22,6 +22,9 @@ from .materials import MaterialError, get_image_material, material_path
 from .providers import provider_status
 from .questions import count_active
 from .sessions import SessionError
+from .taxonomy import TaxonomyError, all_taxonomy
+from .upload_tokens import UploadTokenError, create_token, validate_token
+from .materials import MaterialError, save_material, admin_material_dict
 from .util import iso, utcnow
 
 logger = logging.getLogger(__name__)
@@ -34,12 +37,26 @@ MAX_TRANSCRIPT = 2000
 class SessionCreateRequest(BaseModel):
     token: str | None = None
     deviceId: str | None = Field(default=None, max_length=128)
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    answerMode: str | None = None
+    questionType: str | None = None
+    count: int | None = None
+
+
+class StudyUploadTokenRequest(BaseModel):
+    categoryId: int | None = None
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+    maxUploads: int = 10
+    minutes: int = 10
 
 
 class AnswerRequest(BaseModel):
     questionId: int
     token: str | None = None
     transcript: str | None = Field(default=None, max_length=MAX_TRANSCRIPT)
+    selectedOption: int | None = None
     # Base64 WAV/PCM (optionally a data: URL). Transcript wins when both are sent.
     audio: str | None = None
     audioFormat: str | None = None
@@ -120,7 +137,15 @@ def create_session(
     body = payload or SessionCreateRequest()
     auth.require_device(settings, _request_token(request, body.token))
     device_id = body.deviceId or request.headers.get("X-Device-Id", "")
-    return sessions.create_session(settings, device_id=device_id or "")
+    return sessions.create_session(
+        settings,
+        device_id=device_id or "",
+        age_group_id=body.ageGroupId,
+        subject_id=body.subjectId,
+        answer_mode=(body.answerMode or "").strip() or None,
+        question_type_code=(body.questionType or "").strip() or None,
+        count=body.count,
+    )
 
 
 @router.get("/sessions/{session_id}")
@@ -142,14 +167,15 @@ def answer(
 ) -> dict[str, Any]:
     auth.require_device(settings, _request_token(request, payload.token))
     transcript = (payload.transcript or "").strip()
+    selected_option = payload.selectedOption
     audio_bytes: bytes | None = None
     if payload.audio:
         audio_bytes = _decode_audio_field(payload.audio)
         if len(audio_bytes) > 1_500_000:
             raise SessionError("audio is too large", status_code=413)
-    if not transcript:
+    if not transcript and selected_option is None:
         if not audio_bytes:
-            raise SessionError("transcript or audio is required", status_code=422)
+            raise SessionError("transcript, audio, or selectedOption is required", status_code=422)
         prepared, suffix = prepare_audio(
             audio_bytes,
             filename=_audio_filename(payload.audioFormat),
@@ -170,7 +196,79 @@ def answer(
         question_id=payload.questionId,
         transcript=transcript[:MAX_TRANSCRIPT],
         audio=audio_bytes,
+        selected_option=selected_option,
     )
+
+
+@router.post("/study/upload-tokens")
+def study_upload_token(
+    payload: StudyUploadTokenRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    _: str = Depends(require_device_dep),
+) -> dict[str, Any]:
+    base = settings.public_base_url or str(request.base_url).rstrip("/")
+    try:
+        token = create_token(
+            settings,
+            category_id=payload.categoryId,
+            age_group_id=payload.ageGroupId,
+            subject_id=payload.subjectId,
+            created_by="tv",
+            base_url=base,
+            max_uploads=payload.maxUploads,
+            minutes=payload.minutes,
+        )
+    except Exception as exc:
+        raise SessionError(getattr(exc, "message", str(exc)), status_code=getattr(exc, "status_code", 422)) from exc
+    return {"token": token}
+
+
+@router.get("/mobile/upload-tokens/{raw_token}")
+def mobile_upload_token_info(raw_token: str, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    try:
+        data = validate_token(settings, raw_token)
+    except UploadTokenError as exc:
+        raise SessionError(exc.message, status_code=exc.status_code) from exc
+    return {
+        "token": {
+            "id": data["id"],
+            "expiresAt": data["expires_at"],
+            "maxUploads": data["max_uploads"],
+            "usedCount": data["used_count"],
+            "categoryId": data["category_id"],
+            "ageGroupId": data["age_group_id"],
+            "subjectId": data["subject_id"],
+        },
+        "taxonomy": all_taxonomy(settings),
+    }
+
+
+@router.post("/mobile/uploads", status_code=201)
+def mobile_upload(
+    raw_token: str = Form(...),
+    file: UploadFile = File(...),
+    categoryId: int | None = Form(default=None),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    try:
+        data = validate_token(settings, raw_token, consume=True)
+        content = file.file.read(settings.image_max_mb * 1024 * 1024 + 1)
+        material, created = save_material(
+            settings,
+            filename=file.filename or "phone-upload",
+            content_type=file.content_type or "",
+            data=content,
+            category_id=categoryId if categoryId is not None else data["category_id"],
+            age_group_id=data["age_group_id"],
+            subject_id=data["subject_id"],
+            source="mobile",
+        )
+    except (UploadTokenError, TaxonomyError) as exc:
+        raise SessionError(exc.message, status_code=exc.status_code) from exc
+    except MaterialError as exc:
+        raise SessionError(exc.message, status_code=exc.status_code) from exc
+    return {"material": admin_material_dict(settings, material), "deduplicated": not created}
 
 
 @router.post("/asr")

@@ -11,6 +11,7 @@ from .config import Settings
 from .db import read_session, session
 from .materials import admin_material_dict, get_image_material, material_public_dict
 from .providers import judge_answer_ai
+from .taxonomy import TaxonomyError, age_group_exists, parse_category, question_type as get_question_type, subject_exists
 from .util import (
     iso,
     json_dumps,
@@ -93,6 +94,20 @@ def _parse_options(options: Any) -> list[Any]:
     raise QuestionError("options must be a JSON array")
 
 
+def _validate_choice(question: dict[str, Any]) -> None:
+    if question.get("answer_mode") != "choice":
+        return
+    options = safe_json_loads(question.get("options_json"), [])
+    if not isinstance(options, list) or not 2 <= len(options) <= 4:
+        raise QuestionError("choice questions need 2-4 options")
+    normalized = [normalize_answer(str(item)) for item in options]
+    if len(set(normalized)) != len(normalized):
+        raise QuestionError("choice options must be unique")
+    accepted = split_accepted_answers(str(question.get("answer") or ""))
+    if not any(normalize_answer(answer) in normalized for answer in accepted):
+        raise QuestionError("choice answer must be one of the options")
+
+
 def validate_for_activation(settings: Settings, question: dict[str, Any]) -> None:
     prompt = (question.get("prompt") or "").strip()
     answer = (question.get("answer") or "").strip()
@@ -102,7 +117,9 @@ def validate_for_activation(settings: Settings, question: dict[str, Any]) -> Non
         raise QuestionError("cannot activate a question without an answer")
     if not split_accepted_answers(answer):
         raise QuestionError("answer is empty after normalisation")
-    if question.get("type") == "word_image":
+    _validate_choice(question)
+    info = get_question_type(settings, str(question.get("type") or ""))
+    if (question.get("type") in {"word_image", "word_image_choice"}) or (info and info.get("requires_image")):
         image_id = question.get("image_id")
         if not image_id:
             raise QuestionError(
@@ -125,8 +142,9 @@ def _insert_revision(
         INSERT INTO question_revisions(
             question_id, revision, type, lang, prompt, answer, image_id,
             options_json, explanation, difficulty, status, source,
-            changed_by, change_note, created_at)
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            changed_by, change_note, created_at,
+            age_group_id, subject_id, answer_mode)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             question["id"],
@@ -144,6 +162,9 @@ def _insert_revision(
             changed_by,
             change_note,
             _now(),
+            question.get("age_group_id"),
+            question.get("subject_id"),
+            question.get("answer_mode", "voice"),
         ),
     )
 
@@ -162,6 +183,9 @@ def create_question(
     status_value: str = "draft",
     source: str = "manual",
     meta: dict[str, Any] | None = None,
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    answer_mode: str | None = None,
     changed_by: str = "admin",
     change_note: str = "created",
 ) -> dict[str, Any]:
@@ -177,6 +201,14 @@ def create_question(
         raise QuestionError("answer is required")
     normalized_image = _normalise_image_id(settings, image_id)
     options_list = _parse_options(options)
+    if not age_group_exists(settings, age_group_id):
+        raise QuestionError("age group not found", status_code=404)
+    if not subject_exists(settings, subject_id):
+        raise QuestionError("subject not found", status_code=404)
+    type_info = get_question_type(settings, question_type)
+    mode = (answer_mode or (type_info or {}).get("answer_mode") or "voice").strip().lower()
+    if mode not in {"voice", "choice"}:
+        raise QuestionError("answer_mode must be voice or choice")
     if len(prompt) > 500:
         raise QuestionError("prompt is too long (max 500 characters)")
     if len(answer) > 500:
@@ -194,6 +226,9 @@ def create_question(
         "status": status_value,
         "source": source if source in {"manual", "ai"} else "manual",
         "meta_json": json_dumps(meta or {}),
+        "age_group_id": age_group_id,
+        "subject_id": subject_id,
+        "answer_mode": mode,
         "revision": 1,
     }
     if status_value == "active":
@@ -206,8 +241,9 @@ def create_question(
             INSERT INTO questions(type, lang, prompt, answer, image_id,
                                   options_json, explanation, difficulty,
                                   status, revision, source, meta_json,
+                                  age_group_id, subject_id, answer_mode,
                                   created_at, updated_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record["type"],
@@ -221,6 +257,9 @@ def create_question(
                 record["status"],
                 record["source"],
                 record["meta_json"],
+                record["age_group_id"],
+                record["subject_id"],
+                record["answer_mode"],
                 now,
                 now,
             ),
@@ -267,6 +306,19 @@ def update_question(
         merged["lang"] = _validate_lang(fields["lang"])
     if "type" in fields:
         merged["type"] = _validate_type(fields["type"])
+    if "ageGroupId" in fields:
+        if not age_group_exists(settings, fields["ageGroupId"]):
+            raise QuestionError("age group not found", status_code=404)
+        merged["age_group_id"] = fields["ageGroupId"]
+    if "subjectId" in fields:
+        if not subject_exists(settings, fields["subjectId"]):
+            raise QuestionError("subject not found", status_code=404)
+        merged["subject_id"] = fields["subjectId"]
+    if "answerMode" in fields:
+        mode = str(fields["answerMode"]).strip().lower()
+        if mode not in {"voice", "choice"}:
+            raise QuestionError("answer_mode must be voice or choice")
+        merged["answer_mode"] = mode
     if "options" in fields:
         merged["options_json"] = json_dumps(_parse_options(fields["options"]))
     if "explanation" in fields:
@@ -289,6 +341,7 @@ def update_question(
             UPDATE questions SET type = ?, lang = ?, prompt = ?, answer = ?,
                 image_id = ?, options_json = ?, explanation = ?,
                 difficulty = ?, status = ?, revision = ?, meta_json = ?,
+                age_group_id = ?, subject_id = ?, answer_mode = ?,
                 updated_at = ?
             WHERE id = ?
             """,
@@ -304,6 +357,9 @@ def update_question(
                 merged["status"],
                 merged["revision"],
                 merged["meta_json"],
+                merged.get("age_group_id"),
+                merged.get("subject_id"),
+                merged.get("answer_mode", "voice"),
                 merged["changed_at"],
                 question_id,
             ),
@@ -318,6 +374,15 @@ def update_question(
             change_note=change_note or f"revision {updated['revision']}",
         )
     return updated
+
+
+def soft_delete_question(settings: Settings, question_id: int, *, changed_by: str = "admin") -> None:
+    question = get_question(settings, question_id)
+    if not question:
+        raise QuestionError("question not found", status_code=404)
+    now = _now()
+    with session(settings) as conn:
+        conn.execute("UPDATE questions SET deleted_at = ?, status = 'deleted', updated_at = ? WHERE id = ?", (now, now, question_id))
 
 
 def set_status(
@@ -362,11 +427,17 @@ def list_questions(
     question_type: str | None = None,
     lang: str | None = None,
     search: str | None = None,
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    answer_mode: str | None = None,
+    include_deleted: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
     where: list[str] = []
     params: list[Any] = []
+    if not include_deleted:
+        where.append("deleted_at IS NULL")
     if status_value:
         where.append("status = ?")
         params.append(status_value)
@@ -376,6 +447,12 @@ def list_questions(
     if lang:
         where.append("lang = ?")
         params.append(lang)
+    if age_group_id is not None:
+        where.append("age_group_id = ?"); params.append(age_group_id)
+    if subject_id is not None:
+        where.append("subject_id = ?"); params.append(subject_id)
+    if answer_mode:
+        where.append("answer_mode = ?"); params.append(answer_mode)
     if search:
         where.append("(prompt LIKE ? OR answer LIKE ?)")
         pattern = f"%{search}%"
@@ -420,20 +497,29 @@ def list_recent_revisions(settings: Settings, limit: int = 50) -> list[dict[str,
 
 def count_active(settings: Settings) -> int:
     with read_session(settings) as conn:
-        return conn.execute("SELECT COUNT(*) FROM questions WHERE status = 'active'").fetchone()[0]
+        return conn.execute("SELECT COUNT(*) FROM questions WHERE status = 'active' AND deleted_at IS NULL").fetchone()[0]
 
 
-def select_active_questions(settings: Settings, count: int) -> list[dict[str, Any]]:
-    """Randomly pick ``count`` active questions without repetition."""
+def select_active_questions(
+    settings: Settings,
+    count: int,
+    *,
+    age_group_id: int | None = None,
+    subject_id: int | None = None,
+    answer_mode: str | None = None,
+    question_type_code: str | None = None,
+) -> list[dict[str, Any]]:
+    """Randomly pick ``count`` active, non-deleted questions without repetition."""
+    where = ["status = 'active'", "deleted_at IS NULL"]
+    args: list[Any] = []
+    for column, value in (("age_group_id", age_group_id), ("subject_id", subject_id), ("answer_mode", answer_mode), ("type", question_type_code)):
+        if value:
+            where.append(f"{column} = ?")
+            args.append(value)
     with read_session(settings) as conn:
         rows = conn.execute(
-            """
-            SELECT * FROM questions
-            WHERE status = 'active'
-            ORDER BY RANDOM()
-            LIMIT ?
-            """,
-            (count,),
+            f"SELECT * FROM questions WHERE {' AND '.join(where)} ORDER BY RANDOM() LIMIT ?",
+            [*args, count],
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -461,7 +547,11 @@ def question_public_dict(
         "prompt": question["prompt"],
         "imageUrl": _image_url(settings, question, session_id),
         # Repeat-after-me needs the TV to speak the target once; never render this as text.
-        "say": answer or None,
+        "say": answer or None if question.get("answer_mode") != "choice" else None,
+        "answerMode": question.get("answer_mode", "voice"),
+        "options": safe_json_loads(question.get("options_json"), []) if question.get("answer_mode") == "choice" else [],
+        "ageGroupId": question.get("age_group_id"),
+        "subjectId": question.get("subject_id"),
         "lang": question["lang"],
         "difficulty": question["difficulty"],
     }
@@ -488,6 +578,10 @@ def question_admin_dict(settings: Settings, question: dict[str, Any]) -> dict[st
         "revision": question["revision"],
         "source": question["source"],
         "meta": safe_json_loads(question.get("meta_json"), {}),
+        "ageGroupId": question.get("age_group_id"),
+        "subjectId": question.get("subject_id"),
+        "answerMode": question.get("answer_mode", "voice"),
+        "deletedAt": question.get("deleted_at"),
         "createdAt": question["created_at"],
         "updatedAt": question["updated_at"],
     }

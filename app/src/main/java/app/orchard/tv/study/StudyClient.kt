@@ -9,7 +9,15 @@ import java.net.URL
 
 /** Small HTTP client for the LAN aerial-study service. All calls are blocking; use a worker. */
 object StudyClient {
-    data class Question(val id: Long, val type: String, val imageUrl: String?, val text: String?, val say: String?)
+    data class Question(
+        val id: Long,
+        val type: String,
+        val imageUrl: String?,
+        val text: String?,
+        val say: String?,
+        val answerMode: String = "voice",
+        val options: List<String> = emptyList(),
+    )
     data class Session(val id: String, val questions: List<Question>)
     data class Answer(
         val correct: Boolean,
@@ -62,11 +70,19 @@ object StudyClient {
                 q.optString("imageUrl").takeIf { it.isNotBlank() } ?: image,
                 promptText,
                 q.optString("say").takeIf { it.isNotBlank() },
+                q.optString("answerMode", "voice"),
+                q.optJSONArray("options")?.let { arr -> (0 until arr.length()).map { arr.optString(it) } } ?: emptyList(),
             )
         })
     }
 
-    fun answer(session: String, question: Long, transcript: String, wav: ByteArray? = null): Answer {
+    fun answer(
+        session: String,
+        question: Long,
+        transcript: String,
+        wav: ByteArray? = null,
+        selectedOption: Int? = null,
+    ): Answer {
         val c = open("/api/v1/sessions/$session/answer", "POST")
         c.doOutput = true
         val body = JSONObject().put("questionId", question).put("transcript", transcript)
@@ -74,6 +90,7 @@ object StudyClient {
             body.put("audio", Base64.encodeToString(wav, Base64.NO_WRAP))
             body.put("audioFormat", "audio/wav")
         }
+        if (selectedOption != null) body.put("selectedOption", selectedOption)
         c.outputStream.use { it.write(body.toString().toByteArray()) }
         val json = JSONObject(read(c))
         val progress = json.optJSONObject("progress")
@@ -90,6 +107,16 @@ object StudyClient {
             retry = json.optBoolean("retry"),
         )
     }
+
+    /** Short-lived phone upload URL for materials; TV device token authorises it. */
+    fun createUploadToken(): String? = runCatching {
+        val c = open("/api/v1/study/upload-tokens", "POST")
+        c.doOutput = true
+        val body = JSONObject().put("maxUploads", 10).put("minutes", 10).toString()
+        c.outputStream.use { it.write(body.toByteArray()) }
+        val json = JSONObject(read(c))
+        json.optJSONObject("token")?.optString("url")?.takeIf { it.isNotBlank() }
+    }.getOrNull()
 
     fun transcribe(wav: ByteArray): String {
         val boundary = "AerialStudy" + System.nanoTime().toString(16)

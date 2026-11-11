@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from . import auth
@@ -140,55 +140,34 @@ async def logout(request: Request) -> Any:
     return response
 
 
+SPA_DIR = Path(__file__).parent / "static" / "admin"
+
+
+def _spa_index() -> Any:
+    index = SPA_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(index)
+    return JSONResponse(status_code=503, content={"detail": "admin frontend is not built"})
+
+
 @router.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-def admin_page(request: Request, status: str = "", search: str = "") -> Any:
+def admin_page(request: Request) -> Any:
     settings: Settings = request.app.state.settings
     token = auth.admin_token_from_request(request, settings)
     if not auth.verify_admin_token(settings, token):
         return RedirectResponse("/admin/login?next=/admin", status_code=303)
+    return _spa_index()
 
-    status_filter = status if status in {"draft", "reviewed", "active", "disabled"} else None
-    questions, total_questions = list_questions(
-        settings,
-        status_value=status_filter,
-        search=search or None,
-        limit=100,
-    )
-    with read_session(settings) as conn:
-        counts = {
-            row["status"]: row["count"]
-            for row in conn.execute(
-                "SELECT status, COUNT(*) AS count FROM questions GROUP BY status"
-            ).fetchall()
-        }
-        material_count = conn.execute("SELECT COUNT(*) FROM materials").fetchone()[0]
-    materials = list_materials(settings, limit=100)
-    jobs = request.app.state.generation.list_jobs(limit=20)
-    sessions, session_total = list_sessions(settings, limit=20)
-    revisions = [revision_admin_dict(item) for item in list_recent_revisions(settings, 30)]
-    providers = provider_status(settings)
-    asr_status = request.app.state.asr.status()
 
-    return templates.TemplateResponse(
-        request,
-        "admin.html",
-        {
-            "request": request,
-            "version": settings.version,
-            "questions": [question_admin_dict(settings, item) for item in questions],
-            "question_total": total_questions,
-            "counts": counts,
-            "materials": [admin_material_dict(settings, item) for item in materials],
-            "material_count": material_count,
-            "jobs": jobs,
-            "sessions": sessions,
-            "session_total": session_total,
-            "revisions": revisions,
-            "providers": providers,
-            "asr": asr_status,
-            "status_filter": status_filter or "all",
-            "search": search,
-            "device_auth": settings.device_auth_enabled,
-            "questions_per_session": settings.questions_per_session,
-        },
-    )
+@router.get("/admin/{rest:path}", response_class=HTMLResponse, include_in_schema=False)
+def admin_spa(request: Request, rest: str) -> Any:
+    settings: Settings = request.app.state.settings
+    token = auth.admin_token_from_request(request, settings)
+    if not auth.verify_admin_token(settings, token):
+        return RedirectResponse("/admin/login?next=/admin", status_code=303)
+    return _spa_index()
+
+
+@router.get("/m/upload/{token}", response_class=HTMLResponse, include_in_schema=False)
+def mobile_upload_page(token: str) -> Any:
+    return _spa_index()
