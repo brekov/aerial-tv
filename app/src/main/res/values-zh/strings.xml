@@ -386,4 +386,5 @@
     <string name="study_duration_save">保存</string>
     <string name="study_phone_refresh">刷新二维码</string>
     <string name="study_phone_expires">剩余 %1$s</string>
+    <string name="study_phone_refresh_short">刷新</string>
 </resources>

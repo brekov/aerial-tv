@@ -287,7 +287,7 @@ fun WallpaperSheet(
                         studyExpiresAt,
                         studyClock,
                         onRefresh = { studyRefresh++ },
-                        modifier = Modifier.width(190.dp),
+                        modifier = Modifier.width(190.dp).height(212.dp),
                     )
                 }
 
@@ -911,15 +911,20 @@ private fun StudyQrCard(
         }
         Spacer(Modifier.height(8.dp))
         BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
-        if (remaining.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
-            BasicText(
-                stringResource(R.string.study_phone_expires, remaining),
-                style = Type.Caption.copy(color = if (remaining == "00:00") Color(0xFFFF8A80) else Palette.SecondaryLabel),
-            )
-        }
         Spacer(Modifier.height(4.dp))
-        ActionChip(stringResource(R.string.study_phone_refresh), Glyph.Download, onRefresh)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (remaining.isNotEmpty()) {
+                BasicText(
+                    stringResource(R.string.study_phone_expires, remaining),
+                    style = Type.Caption.copy(color = if (remaining == "00:00") Color(0xFFFF8A80) else Palette.SecondaryLabel),
+                )
+            }
+            ActionChip(stringResource(R.string.study_phone_refresh_short), Glyph.Download, onRefresh)
+        }
     }
 }
 

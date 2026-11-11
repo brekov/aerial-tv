@@ -387,4 +387,5 @@
     <string name="study_duration_save">Save</string>
     <string name="study_phone_refresh">Refresh QR code</string>
     <string name="study_phone_expires">Remaining %1$s</string>
+    <string name="study_phone_refresh_short">Refresh</string>
 </resources>
