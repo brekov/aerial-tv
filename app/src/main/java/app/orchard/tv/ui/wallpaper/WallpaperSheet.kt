@@ -883,9 +883,13 @@ private fun PhoneCard(url: String?, qr: ImageBitmap?) {
 /** Parent upload QR under the Study section; the Aerial personalization QR stays on the sheet's right. */
 @Composable
 private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Modifier) {
-    Column(modifier.padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier.padding(top = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
         Box(
-            Modifier.size(160.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
+            Modifier.size(150.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (qr != null) {
@@ -894,11 +898,9 @@ private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Mod
                 GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 30.dp)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        // Title sits at the bottom edge so its baseline aligns with the left card border.
         BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
-        // Expiry is handled automatically; no countdown or refresh control here.
         if (url == null) {
-            Spacer(Modifier.height(4.dp))
             BasicText(
                 stringResource(R.string.wp_phone_offline),
                 style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
