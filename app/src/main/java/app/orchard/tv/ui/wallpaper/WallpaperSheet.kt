@@ -885,7 +885,7 @@ private fun PhoneCard(url: String?, qr: ImageBitmap?) {
 private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Modifier) {
     Column(modifier.padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(132.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
+            Modifier.size(160.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (qr != null) {
