@@ -220,40 +220,49 @@ fun WallpaperSheet(
 
                 Spacer(Modifier.height(18.dp))
                 SectionTitle(R.string.study_section)
-                Group { note ->
-                    SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
-                        ActionChip(
-                            if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
-                            if (studyEnabled) Glyph.Check else Glyph.Offline,
-                        ) {
-                            val on = !studyEnabled
-                            studyEnabled = on
-                            StudySettings.enabled = on
-                            if (on) {
-                                StudyWatch.start(context)
-                            } else {
-                                StudyOverlay.dismiss()
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                    Group { note ->
+                        SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
+                            ActionChip(
+                                if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
+                                if (studyEnabled) Glyph.Check else Glyph.Offline,
+                            ) {
+                                val on = !studyEnabled
+                                studyEnabled = on
+                                StudySettings.enabled = on
+                                if (on) {
+                                    StudyWatch.start(context)
+                                } else {
+                                    StudyOverlay.dismiss()
+                                }
                             }
                         }
+                        val durations = listOf(3, 6, 10, 15, 20, 30)
+                        Choices(
+                            R.string.study_duration,
+                            stringResource(R.string.study_duration_hint),
+                            note,
+                            durations.map { it to stringResource(R.string.study_duration_value, it) },
+                            StudySettings.intervalMinutes,
+                            { minutes ->
+                                StudySettings.intervalMinutes = minutes
+                                StudySettings.resetWatch()
+                            },
+                        )
+                        SettingRow(R.string.study_mimo, stringResource(R.string.study_mimo_hint), note) {
+                            ActionChip(
+                                if (StudySettings.mimoConfigured) stringResource(R.string.study_mimo_set) else stringResource(R.string.study_mimo_unset),
+                                Glyph.Gear,
+                            ) { showMimo = true }
+                        }
                     }
-                    val durations = listOf(3, 6, 10, 15, 20, 30)
-                    Choices(
-                        R.string.study_duration,
-                        stringResource(R.string.study_duration_hint),
-                        note,
-                        durations.map { it to stringResource(R.string.study_duration_value, it) },
-                        StudySettings.intervalMinutes,
-                        { minutes ->
-                            StudySettings.intervalMinutes = minutes
-                            StudySettings.resetWatch()
-                        },
-                    )
-                    SettingRow(R.string.study_mimo, stringResource(R.string.study_mimo_hint), note) {
-                        ActionChip(
-                            if (StudySettings.mimoConfigured) stringResource(R.string.study_mimo_set) else stringResource(R.string.study_mimo_unset),
-                            Glyph.Gear,
-                        ) { showMimo = true }
                     }
+                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp))
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -437,7 +446,7 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(24.dp))
             }
             Spacer(Modifier.width(28.dp))
-            PhoneCard(phoneUrl, qr, studyUploadUrl, studyQr)
+            PhoneCard(phoneUrl, qr)
         }
     }
 
@@ -807,48 +816,56 @@ private fun ScreensaverChoice(onStart: () -> Unit) {
 }
 
 @Composable
-private fun PhoneCard(
-    aerialUrl: String?,
-    aerialQr: ImageBitmap?,
-    studyUrl: String?,
-    studyQr: ImageBitmap?,
-) {
-    // The right column is the parent's phone entry point. Prefer the Study material upload page;
-    // fall back to Aerial's local personalization page when the NAS is offline.
-    val usingStudy = studyQr != null
-    val shownQr = studyQr ?: aerialQr
-    val shownUrl = if (usingStudy) studyUrl else aerialUrl
+private fun PhoneCard(url: String?, qr: ImageBitmap?) {
     Column(Modifier.width(220.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(176.dp).smoothBackground(Color.White, 18.dp).padding(14.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (shownQr != null) {
-                Image(shownQr, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
+            if (qr != null) {
+                Image(qr, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
             } else {
                 GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 40.dp)
             }
         }
         Spacer(Modifier.height(14.dp))
-        BasicText(
-            stringResource(if (usingStudy) R.string.study_phone_title else R.string.wp_phone_title),
-            style = Type.Headline,
-        )
+        BasicText(stringResource(R.string.wp_phone_title), style = Type.Headline)
         Spacer(Modifier.height(4.dp))
         BasicText(
-            stringResource(
-                if (usingStudy) R.string.study_phone_body
-                else if (aerialUrl != null) R.string.wp_phone_body else R.string.wp_phone_offline
-            ),
+            stringResource(if (url != null) R.string.wp_phone_body else R.string.wp_phone_offline),
             style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
         )
-        if (shownUrl != null) {
+        if (url != null) {
             Spacer(Modifier.height(6.dp))
-            BasicText(shownUrl.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+            BasicText(url.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
         }
-        if (usingStudy && aerialUrl != null) {
-            Spacer(Modifier.height(5.dp))
-            BasicText(aerialUrl.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+    }
+}
+
+/** Parent upload QR under the Study section; the Aerial personalization QR stays on the sheet's right. */
+@Composable
+private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Modifier) {
+    Column(modifier.padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.size(132.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (qr != null) {
+                Image(qr, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
+            } else {
+                GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 30.dp)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
+        Spacer(Modifier.height(3.dp))
+        BasicText(
+            stringResource(R.string.study_phone_body),
+            style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+        )
+        if (url != null) {
+            Spacer(Modifier.height(4.dp))
+            BasicText(url.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
         }
     }
 }
