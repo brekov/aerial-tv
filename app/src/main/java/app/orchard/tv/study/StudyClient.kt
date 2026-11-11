@@ -2,6 +2,7 @@ package app.orchard.tv.study
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Base64
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -10,7 +11,16 @@ import java.net.URL
 object StudyClient {
     data class Question(val id: Long, val type: String, val imageUrl: String?, val text: String?, val say: String?)
     data class Session(val id: String, val questions: List<Question>)
-    data class Answer(val correct: Boolean, val score: Int, val progress: Int, val finished: Boolean, val restart: Boolean, val retry: Boolean)
+    data class Answer(
+        val correct: Boolean,
+        val score: Int,
+        val pronunciationOverall: Int?,
+        val mimoVerdict: String?,
+        val progress: Int,
+        val finished: Boolean,
+        val restart: Boolean,
+        val retry: Boolean,
+    )
 
     private fun base() = StudySettings.baseUrl.trimEnd('/')
 
@@ -56,16 +66,24 @@ object StudyClient {
         })
     }
 
-    fun answer(session: String, question: Long, transcript: String): Answer {
+    fun answer(session: String, question: Long, transcript: String, wav: ByteArray? = null): Answer {
         val c = open("/api/v1/sessions/$session/answer", "POST")
         c.doOutput = true
-        val body = JSONObject().put("questionId", question).put("transcript", transcript).toString()
-        c.outputStream.use { it.write(body.toByteArray()) }
+        val body = JSONObject().put("questionId", question).put("transcript", transcript)
+        if (wav != null) {
+            body.put("audio", Base64.encodeToString(wav, Base64.NO_WRAP))
+            body.put("audioFormat", "audio/wav")
+        }
+        c.outputStream.use { it.write(body.toString().toByteArray()) }
         val json = JSONObject(read(c))
         val progress = json.optJSONObject("progress")
+        val pronunciation = json.optJSONObject("pronunciation")
+        val mimo = json.optJSONObject("mimoJudge")
         return Answer(
             correct = json.optBoolean("correct"),
             score = json.optInt("score", 0).coerceIn(0, 100),
+            pronunciationOverall = pronunciation?.optInt("overall", -1)?.takeIf { it >= 0 }?.coerceIn(0, 100),
+            mimoVerdict = mimo?.optString("verdict")?.takeIf { it.isNotBlank() },
             progress = progress?.optInt("currentIndex") ?: 0,
             finished = json.optBoolean("finished"),
             restart = json.optBoolean("restart"),

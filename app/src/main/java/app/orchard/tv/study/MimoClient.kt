@@ -63,6 +63,26 @@ object MimoClient {
         return Base64.decode(base64, Base64.DEFAULT)
     }
 
+    /** English-only word reference; keeps the target out of the Chinese instruction sentence. */
+    fun synthesizeWord(word: String): ByteArray {
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "user").put("content", "Read this English word aloud naturally and clearly. Do not translate or transliterate it."))
+            .put(JSONObject().put("role", "assistant").put("content", word))
+        val body = JSONObject()
+            .put("model", StudySettings.mimoTtsModel)
+            .put("messages", messages)
+            .put("audio", JSONObject().put("format", "wav").put("voice", StudySettings.mimoVoice))
+            .put("stream", false)
+        val json = JSONObject(post(body))
+        val audio = json.optJSONArray("choices")?.optJSONObject(0)
+            ?.optJSONObject("message")?.optJSONObject("audio")
+            ?: error("MiMo TTS: missing choices[0].message.audio")
+        val data = audio.optString("data")
+        if (data.isBlank()) error("MiMo TTS returned empty audio")
+        val base64 = if (data.startsWith("data:")) data.substringAfter(',') else data
+        return Base64.decode(base64, Base64.DEFAULT)
+    }
+
     private fun post(body: JSONObject): String {
         val endpoint = StudySettings.mimoBaseUrl.trimEnd('/') + "/chat/completions"
         val connection = URL(endpoint).openConnection() as HttpURLConnection

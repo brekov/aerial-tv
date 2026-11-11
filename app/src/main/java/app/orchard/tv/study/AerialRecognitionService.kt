@@ -168,6 +168,7 @@ class AerialRecognitionService : RecognitionService() {
             if (!started || speechFrames < 30) return fail(listener, "too short")
             main.post { listener.endOfSpeech() }
             val wav = wav(utterance.toByteArray())
+            StudyAudioBus.put(wav)
             val text = (if (StudySettings.mimoConfigured) {
                 runCatching { MimoClient.transcribe(wav) }
             } else {

@@ -345,4 +345,5 @@
     <string name="study_wrong_hint">Неправильно
 Спробуй ще раз, стеж за вимовою</string>
     <string name="study_next_auto">Наступне питання почнеться автоматично…</string>
+    <string name="study_voice_listen_word">Прослухайте слово, потім повторіть.</string>
 </resources>

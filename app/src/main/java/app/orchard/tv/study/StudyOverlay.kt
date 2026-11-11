@@ -474,9 +474,15 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             status.text = service.getString(R.string.study_listen_first)
             status.setTextColor(Color.WHITE)
             status.visibility = View.VISIBLE
-            // One spoken instruction includes the model word, so a pre-reader knows what follows.
-            StudyVoice.speak(service, service.getString(R.string.study_voice_listen_follow, q.say)) {
-                main.post { if (!closed) listen() }
+            // Keep the English target out of the Chinese instruction so the TTS cannot
+            // pronounce "lion" as the Chinese approximation "里昂".
+            StudyVoice.speak(service, service.getString(R.string.study_voice_listen_word)) {
+                main.post {
+                    if (closed) return@post
+                    StudyVoice.speakWord(service, q.say!!) {
+                        main.post { if (!closed) listen() }
+                    }
+                }
             }
         } else {
             StudyVoice.speak(service, service.getString(R.string.study_voice_follow)) {
@@ -578,7 +584,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         status.visibility = View.VISIBLE
         main.removeCallbacks(timeout)
         io.execute {
-            val answer = runCatching { StudyClient.answer(s.id, q.id, transcript) }
+            val answer = runCatching { StudyClient.answer(s.id, q.id, transcript, StudyAudioBus.take()) }
             main.post {
                 if (closed) return@post
                 answer.onSuccess { a ->
@@ -605,8 +611,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                         announce(R.string.study_voice_passed) { main.postDelayed(pass, 600) }
                     } else {
                         showCue(Cue.CHECK)
+                        val shownScore = a.pronunciationOverall ?: a.score
                         val display = service.getString(R.string.study_right) + " · " +
-                            service.getString(R.string.study_score, a.score) + "\n" +
+                            service.getString(R.string.study_score, shownScore) + "\n" +
                             service.getString(R.string.study_next_auto)
                         announce(R.string.study_voice_right, display, { scheduleNext() })
                     }

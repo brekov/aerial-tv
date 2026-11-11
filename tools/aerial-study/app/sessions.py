@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from .audio_judge import judge_audio
 from .config import Settings
 from .db import read_session, session
 from .questions import (
@@ -159,6 +160,7 @@ def submit_answer(
     *,
     question_id: int,
     transcript: str,
+    audio: bytes | None = None,
     allow_ai_judge: bool = True,
 ) -> dict[str, Any]:
     row = load_session(settings, session_id)
@@ -186,10 +188,37 @@ def submit_answer(
     )
     score = int(judge_detail.get("score") or 0)
 
+    audio_result: dict[str, Any] | None = None
+    audio_retry = False
+    if audio:
+        accepted = question.get("answer", "")
+        word = accepted.split("|", 1)[0].strip() if accepted else ""
+        audio_result = judge_audio(settings, reference=accepted, word=word, audio=audio)
+        if audio_result:
+            judge_detail["audioJudge"] = audio_result
+            pronunciation = audio_result.get("pronunciation") or {}
+            overall = pronunciation.get("overall")
+            # High-confidence audio veto for gross mispronunciations.  The
+            # normal "near" case remains coaching only until thresholds are
+            # calibrated on real children.
+            if (
+                correct
+                and isinstance(overall, int)
+                and overall < 50
+                and audio_result.get("verdict") == "wrong"
+                and float(audio_result.get("confidence") or 0.0) >= 0.85
+            ):
+                correct = False
+                audio_retry = True
+                judge_method = "near_miss"
+                judge_detail["retry"] = True
+                judge_detail["audioTriggeredRetry"] = True
+                score = overall
+
     now = utcnow()
     timestamp = iso(now)
     finished = False
-    retry = bool(judge_detail.get("retry"))
+    retry = bool(judge_detail.get("retry")) or audio_retry
     with session(settings) as conn:
         attempt_no = (
             conn.execute(
@@ -271,6 +300,17 @@ def submit_answer(
         "judgeMethod": judge_method,
         "session": _session_header(row),
     }
+    if audio_result:
+        result["mimoJudge"] = {
+            "verdict": audio_result.get("verdict"),
+            "confidence": audio_result.get("confidence"),
+            "heard": audio_result.get("heard"),
+            "issues": audio_result.get("issues"),
+            "feedback": audio_result.get("feedback"),
+        }
+        result["pronunciation"] = audio_result.get("pronunciation")
+        result["decision"] = "pass" if correct else ("retry" if retry else "restart")
+        result["audioShadow"] = True
     if correct and not finished:
         next_question = get_question(settings, question_ids[current_index + 1])
         result["nextQuestion"] = _next_question_payload(settings, row, next_question)

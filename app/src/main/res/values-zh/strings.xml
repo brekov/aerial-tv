@@ -375,4 +375,5 @@
     <string name="study_wrong_hint">发音不正确
 请再试一次，注意发音哦~</string>
     <string name="study_next_auto">下一题将自动开始…</string>
+    <string name="study_voice_listen_word">请听单词，然后跟读。</string>
 </resources>

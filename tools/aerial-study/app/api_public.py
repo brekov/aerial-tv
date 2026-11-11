@@ -142,10 +142,14 @@ def answer(
 ) -> dict[str, Any]:
     auth.require_device(settings, _request_token(request, payload.token))
     transcript = (payload.transcript or "").strip()
-    if not transcript:
-        if not payload.audio:
-            raise SessionError("transcript or audio is required", status_code=422)
+    audio_bytes: bytes | None = None
+    if payload.audio:
         audio_bytes = _decode_audio_field(payload.audio)
+        if len(audio_bytes) > 1_500_000:
+            raise SessionError("audio is too large", status_code=413)
+    if not transcript:
+        if not audio_bytes:
+            raise SessionError("transcript or audio is required", status_code=422)
         prepared, suffix = prepare_audio(
             audio_bytes,
             filename=_audio_filename(payload.audioFormat),
@@ -165,6 +169,7 @@ def answer(
         session_id,
         question_id=payload.questionId,
         transcript=transcript[:MAX_TRANSCRIPT],
+        audio=audio_bytes,
     )
 
 

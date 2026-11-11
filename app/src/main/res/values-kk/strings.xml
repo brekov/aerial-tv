@@ -345,4 +345,5 @@
     <string name="study_wrong_hint">Дұрыс емес
 Қайтадан көріңіз, айтылымға назар аударыңыз</string>
     <string name="study_next_auto">Келесі сұрақ автоматты түрде басталады…</string>
+    <string name="study_voice_listen_word">Сөзді тыңдап, кейін қайталаңыз.</string>
 </resources>
