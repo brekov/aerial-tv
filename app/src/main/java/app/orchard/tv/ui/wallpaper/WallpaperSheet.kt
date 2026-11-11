@@ -893,7 +893,7 @@ private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Mod
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Box(
-            Modifier.size(150.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
+            Modifier.size(168.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (qr != null) {
