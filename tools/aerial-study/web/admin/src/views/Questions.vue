@@ -19,7 +19,7 @@
         <div class="stat"><span>易错题</span><b>{{ wrongCount }}</b></div>
       </div>
     </div>
-    <div class="notice">💡 <span><b>题库已按新结构整理。</b> 图片题现在显示缩略图和可读标题，分类不再显示内部代码。</span></div>
+    <div class="notice">💡 <span><b>从图片和分类入手。</b> 点击题目可预览答案、作答统计和最近记录。</span></div>
     <div class="body-grid">
       <aside class="filter-card">
         <div class="filter-head"><span>筛选</span><button class="link" @click="reset">重置</button></div>

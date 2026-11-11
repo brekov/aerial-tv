@@ -18,7 +18,7 @@
         <div class="mat-img" @click="preview=m"><img :src="m.url" :alt="m.title"></div>
         <div class="mat-title">{{ m.title }}</div>
         <div class="mat-meta"><span class="pill blue">{{ m.category?.name || '未分类' }}</span><span class="pill">{{ m.ageGroup?.name || '未分类' }}</span><span class="pill">{{ sourceText(m.source) }}</span></div>
-        <div style="display:flex;gap:4px;margin-top:8px"><button class="link" @click="edit=m;editForm={title:m.title,categoryId:m.category?.id||null,ageGroupId:m.ageGroup?.id||null,subjectId:m.subject?.id||null}">编辑分类</button><button class="link" @click="preview=m">查看</button></div>
+        <div style="display:flex;gap:4px;margin-top:8px"><button class="link" @click="edit=m;editForm={title:m.title,categoryId:m.category?.id||null,ageGroupId:m.ageGroup?.id||null,subjectId:m.subject?.id||null}">编辑分类</button><button class="link" @click="preview=m">查看</button><button class="link danger" @click="removeMaterial(m)">删除</button></div>
       </article>
     </div>
   </div>
@@ -41,6 +41,7 @@ const filtered=computed(()=>materials.value)
 function sourceText(s){return ({phone:'手机上传',scan:'目录扫描',upload:'网页上传'})[s]||s||'未知'}
 async function load(){loading.value=true;try{const p=new URLSearchParams({limit:'300'});if(categoryId.value)p.set('categoryId',categoryId.value);if(ageGroupId.value)p.set('ageGroupId',ageGroupId.value);if(subjectId.value)p.set('subjectId',subjectId.value);if(source.value)p.set('source',source.value);const d=await api('/api/v1/admin/materials?'+p);materials.value=d.items||[]}catch(e){toast.value=e.message}finally{loading.value=false}}
 async function saveMaterial(){try{await api(`/api/v1/admin/materials/${edit.value.sha256}`,{method:'PATCH',body:editForm.value});edit.value=null;toast.value='素材分类已更新';await load()}catch(e){toast.value=e.message}}
+async function removeMaterial(m){if(!confirm(`删除素材「${m.title}」？`))return;try{await api(`/api/v1/admin/materials/${m.sha256}`,{method:'DELETE'});toast.value='素材已删除';await load()}catch(e){toast.value=e.message}}
 async function makeQr(){qrUrl.value='';try{const d=await api('/api/v1/admin/upload-tokens',{method:'POST',body:{categoryId:categoryId.value,ageGroupId:ageGroupId.value,subjectId:subjectId.value,maxUploads:20,minutes:30}});qrUrl.value=await QRCode.toDataURL(d.token.url,{width:460,margin:1})}catch(e){toast.value=e.message}}
 function showQr(){qrOpen.value=true;makeQr()}
 async function runScan(){try{scanResult.value=await api('/api/v1/admin/materials/scan',{method:'POST',body:scanForm.value});toast.value='扫描完成';await load()}catch(e){toast.value=e.message}}

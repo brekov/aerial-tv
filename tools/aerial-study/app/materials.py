@@ -260,6 +260,29 @@ def admin_material_dict(settings: Settings, material: dict[str, Any]) -> dict[st
     }
 
 
+def delete_material(settings: Settings, sha256: str) -> None:
+    """Delete an unused material and its file; refuse if a live question uses it."""
+    material = get_material(settings, sha256)
+    if not material:
+        raise MaterialError("material not found", status_code=404)
+    with read_session(settings) as conn:
+        refs = conn.execute(
+            "SELECT COUNT(*) FROM questions WHERE image_id = ? AND deleted_at IS NULL",
+            (sha256,),
+        ).fetchone()[0]
+    if refs:
+        raise MaterialError(
+            f"该素材被 {refs} 道题使用，请先调整或删除相关题目", status_code=409
+        )
+    path = material_path(settings, material)
+    with session(settings) as conn:
+        conn.execute("DELETE FROM materials WHERE sha256 = ?", (sha256,))
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def get_image_material(settings: Settings, image_id: str) -> dict[str, Any] | None:
     """Look up an image material by sha256 or by numeric material id."""
     material = get_material(settings, image_id)

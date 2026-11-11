@@ -23,6 +23,7 @@ from .generation import GenerationService
 from .admin_views import material_view, question_view, questions_view
 from .materials import (
     admin_material_dict,
+    delete_material,
     list_materials,
     save_material,
 )
@@ -274,6 +275,12 @@ def cleanup_non_active_endpoint(payload: MaintenanceRequest, settings: Settings 
     if not payload.dryRun and not payload.confirm:
         raise HTTPException(status_code=422, detail="confirm=true is required to delete questions")
     return cleanup_non_active(settings, dry_run=payload.dryRun)
+
+
+@router.delete("/materials/{sha256}", status_code=204)
+def remove_material(sha256: str, settings: Settings = Depends(get_settings)) -> Response:
+    delete_material(settings, sha256)
+    return Response(status_code=204)
 
 
 @router.get("/taxonomies")
