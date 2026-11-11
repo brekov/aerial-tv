@@ -1,18 +1,17 @@
-<template><div>
-<div class="page-head"><div><h1>分类管理</h1><p class="muted">年龄、学科、题型和素材分类</p></div><button @click="load">刷新</button></div>
-<div class="panel"><h2>年龄/学段</h2><div class="row"><input v-model="age.code" placeholder="代码，如 grade1"><input v-model="age.name" placeholder="名称，如 一年级"><button @click="add('age-groups',age)">新增</button></div><div class="tags" style="margin-top:10px"><span class="tag" v-for="x in t.ageGroups" :key="x.id">{{ x.name }}</span></div></div>
-<div class="panel"><h2>学科/能力</h2><div class="row"><input v-model="subject.code" placeholder="代码，如 literacy"><input v-model="subject.name" placeholder="名称，如 识字"><button @click="add('subjects',subject)">新增</button></div><div class="tags" style="margin-top:10px"><span class="tag" v-for="x in t.subjects" :key="x.id">{{ x.name }}</span></div></div>
-<div class="panel"><h2>素材分类</h2><div class="row"><input v-model="category.name" placeholder="分类名称"><button @click="add('material-categories',category)">新增</button></div><div class="tags" style="margin-top:10px"><span class="tag" v-for="x in t.materialCategories" :key="x.id">{{ x.name }}</span></div></div>
-<div class="panel"><h2>题型</h2><div class="table-wrap"><table><thead><tr><th>代码</th><th>名称</th><th>答题方式</th><th>图片</th><th>选项</th></tr></thead><tbody><tr v-for="x in t.questionTypes" :key="x.code"><td>{{ x.code }}</td><td>{{ x.name }}</td><td>{{ x.answer_mode }}</td><td>{{ x.requires_image ? '必需':'可选' }}</td><td>{{ x.min_options }}–{{ x.max_options }}</td></tr></tbody></table></div></div>
-<div class="toast" v-if="toast">{{ toast }}</div>
-</div></template>
+<template>
+<div>
+<header class="topbar"><div class="crumb">设置 / <b>分类管理</b></div><div class="search">⌕ <span>搜索分类…</span></div><div class="top-actions"><button class="btn" @click="add">＋ 新增</button><div class="avatar">AS</div></div></header>
+<div class="content"><div class="page-title"><div><h1>分类管理</h1><p>年龄、学科、题型和素材分类，题库与素材共用。</p></div></div>
+<div class="tabs" style="display:inline-flex;margin-bottom:14px"><button class="tab" :class="{on:tab==='age'}" @click="tab='age'">年龄 / 学段</button><button class="tab" :class="{on:tab==='subject'}" @click="tab='subject'">学科</button><button class="tab" :class="{on:tab==='type'}" @click="tab='type'">题型</button><button class="tab" :class="{on:tab==='category'}" @click="tab='category'">素材分类</button></div>
+<div class="panel" style="overflow:hidden"><div v-for="item in items" :key="item.id||item.code" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f0f4f9"><b style="min-width:180px">{{item.name}}</b><span class="muted" style="flex:1">{{item.code||('排序 '+item.sortOrder)}}</span><span class="pill" :class="item.active===false?'red':'green'">{{item.active===false?'停用':'启用'}}</span><button class="link" @click="edit=item.name">重命名</button></div><div v-if="!items.length" class="empty">暂无分类</div></div>
+<div v-if="toast" class="toast">{{toast}}</div></div>
+</div>
+</template>
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
-import { api } from '../api'
-const t = ref({ ageGroups: [], subjects: [], materialCategories: [], questionTypes: [] })
-const age = reactive({ code: '', name: '' }); const subject = reactive({ code: '', name: '' }); const category = reactive({ name: '' })
-const toast = ref('')
-async function load(){ const d=await api('/api/v1/admin/taxonomies'); t.value=d }
-async function add(kind, payload){ try { await api(`/api/v1/admin/${kind}`,{method:'POST',body:payload}); toast.value='已新增'; await load(); payload.name=''; payload.code='' } catch(e){ toast.value=e.message } }
-onMounted(()=>load().catch(e=>toast.value=e.message))
+import {ref,computed,onMounted,watch} from 'vue'; import {api} from '../api'
+const tax=ref({ageGroups:[],subjects:[],questionTypes:[],materialCategories:[]});const tab=ref('age');const toast=ref('');const edit=ref(null)
+const items=computed(()=>tab.value==='age'?tax.value.ageGroups:tab.value==='subject'?tax.value.subjects:tab.value==='type'?tax.value.questionTypes:tax.value.materialCategories)
+async function load(){tax.value=await api('/api/v1/admin/taxonomies');}
+async function add(){const name=prompt('名称');if(!name)return;try{const path=tab.value==='age'?'age-groups':tab.value==='subject'?'subjects':tab.value==='type'?null:'material-categories';if(!path){toast.value='题型请直接编辑种子项';return}await api('/api/v1/admin/'+path,{method:'POST',body:{name}});toast.value='已新增';await load()}catch(e){toast.value=e.message}}
+onMounted(()=>load().catch(e=>toast.value=e.message));watch(tab,()=>{})
 </script>

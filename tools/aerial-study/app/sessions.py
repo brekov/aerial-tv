@@ -426,7 +426,7 @@ def wrong_questions(
         rows = conn.execute(
             f"""
             SELECT q.id AS question_id, q.prompt, q.answer, q.type, q.answer_mode,
-                   q.age_group_id, q.subject_id, q.difficulty,
+                   q.age_group_id, q.subject_id, q.difficulty, q.image_id,
                    COUNT(a.id) AS total_attempts,
                    SUM(CASE WHEN a.correct = 0 THEN 1 ELSE 0 END) AS wrong_attempts,
                    MAX(CASE WHEN a.correct = 0 THEN a.created_at ELSE NULL END) AS last_wrong_at

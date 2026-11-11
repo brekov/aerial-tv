@@ -27,6 +27,7 @@ from .materials import MaterialError
 from .providers import ProviderError
 from .questions import QuestionError
 from .sessions import SessionError
+from .taxonomy import TaxonomyError
 
 logger = logging.getLogger("aerial_study")
 
@@ -35,6 +36,7 @@ _ERROR_TYPES = (
     ProviderError,
     QuestionError,
     SessionError,
+    TaxonomyError,
     AsrError,
     GenerationError,
 )

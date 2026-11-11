@@ -20,6 +20,7 @@ from .config import Settings
 from .db import read_session
 from .deps import get_settings, require_admin_dep
 from .generation import GenerationService
+from .admin_views import material_view, question_view, questions_view
 from .materials import (
     admin_material_dict,
     list_materials,
@@ -33,6 +34,7 @@ from .taxonomy import (
     update_item,
     update_question_type,
 )
+from .maintenance import cleanup_non_active, cleanup_seed
 from .upload_tokens import create_token
 from .providers import (
     PROVIDER_NAMES,
@@ -51,6 +53,7 @@ from .questions import (
     soft_delete_question,
     update_question,
 )
+from .sessions import question_attempts as load_question_attempts
 from .sessions import list_sessions, question_attempts, session_detail, wrong_questions
 
 router = APIRouter(
@@ -153,6 +156,11 @@ class ScanRequest(BaseModel):
     recursive: bool = True
 
 
+class MaintenanceRequest(BaseModel):
+    dryRun: bool = True
+    confirm: bool = False
+
+
 class UploadTokenRequest(BaseModel):
     categoryId: int | None = None
     ageGroupId: int | None = None
@@ -201,14 +209,71 @@ def get_materials(
     source: str | None = None,
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    items = [
-        admin_material_dict(settings, material)
-        for material in list_materials(
-            settings, kind=kind, limit=limit, category_id=categoryId,
-            age_group_id=ageGroupId, subject_id=subjectId, source=source,
-        )
-    ]
+    maps = None
+    items = []
+    from .admin_views import taxonomy_maps
+    maps = taxonomy_maps(settings)
+    for material in list_materials(
+        settings, kind=kind, limit=limit, category_id=categoryId,
+        age_group_id=ageGroupId, subject_id=subjectId, source=source,
+    ):
+        items.append(material_view(settings, material, maps))
     return {"items": items}
+
+
+class MaterialUpdateRequest(BaseModel):
+    title: str | None = None
+    categoryId: int | None = None
+    ageGroupId: int | None = None
+    subjectId: int | None = None
+
+
+@router.patch("/materials/{sha256}")
+def patch_material(sha256: str, payload: MaterialUpdateRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    from .db import session as db_session
+    from .materials import get_material
+    from .taxonomy import age_group_exists, parse_category, subject_exists
+    from .util import iso, utcnow
+    material = get_material(settings, sha256)
+    if not material:
+        raise HTTPException(status_code=404, detail="material not found")
+    if payload.ageGroupId is not None and not age_group_exists(settings, payload.ageGroupId):
+        raise HTTPException(status_code=404, detail="age group not found")
+    if payload.subjectId is not None and not subject_exists(settings, payload.subjectId):
+        raise HTTPException(status_code=404, detail="subject not found")
+    if payload.categoryId is not None:
+        parse_category(settings, payload.categoryId)
+    fields: list[str] = []
+    values: list[Any] = []
+    if payload.title is not None:
+        fields.append("title = ?"); values.append(payload.title.strip())
+    if payload.categoryId is not None:
+        fields.append("category_id = ?"); values.append(payload.categoryId)
+    if payload.ageGroupId is not None:
+        fields.append("age_group_id = ?"); values.append(payload.ageGroupId)
+    if payload.subjectId is not None:
+        fields.append("subject_id = ?"); values.append(payload.subjectId)
+    if not fields:
+        raise HTTPException(status_code=422, detail="no fields to update")
+    fields.append("updated_at = ?"); values.append(iso(utcnow())); values.append(sha256)
+    with db_session(settings) as conn:
+        conn.execute(f"UPDATE materials SET {', '.join(fields)} WHERE sha256 = ?", values)
+    updated = get_material(settings, sha256)
+    return {"material": material_view(settings, updated or material)}
+
+
+@router.post("/maintenance/cleanup-seed")
+def cleanup_seed_endpoint(payload: MaintenanceRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    if not payload.dryRun and not payload.confirm:
+        raise HTTPException(status_code=422, detail="confirm=true is required to delete seed data")
+    return cleanup_seed(settings, dry_run=payload.dryRun)
+
+
+@router.post("/maintenance/cleanup-non-active")
+def cleanup_non_active_endpoint(payload: MaintenanceRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    if not payload.dryRun and not payload.confirm:
+        raise HTTPException(status_code=422, detail="confirm=true is required to delete questions")
+    return cleanup_non_active(settings, dry_run=payload.dryRun)
 
 
 @router.get("/taxonomies")
@@ -361,7 +426,7 @@ def get_questions(
         offset=offset,
     )
     return {
-        "items": [question_admin_dict(settings, item) for item in items],
+        "items": questions_view(settings, items),
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -410,8 +475,9 @@ def get_question_endpoint(
         raise HTTPException(status_code=404, detail="question not found")
     revisions = list_revisions(settings, question_id)
     return {
-        "question": question_admin_dict(settings, question),
+        "question": question_view(settings, question),
         "revisions": [revision_admin_dict(item) for item in revisions],
+        "attempts": load_question_attempts(settings, question_id, limit=30),
     }
 
 
@@ -493,16 +559,23 @@ def get_wrong_questions(
     limit: int = 100,
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    return {
-        "items": wrong_questions(
-            settings,
-            age_group_id=ageGroupId,
-            subject_id=subjectId,
-            question_type_code=type,
-            min_wrong=minWrong,
-            limit=limit,
-        )
-    }
+    from .admin_views import STATUS_LABELS, taxonomy_maps
+    maps = taxonomy_maps(settings)
+    items = wrong_questions(
+        settings,
+        age_group_id=ageGroupId,
+        subject_id=subjectId,
+        question_type_code=type,
+        min_wrong=minWrong,
+        limit=limit,
+    )
+    for item in items:
+        item["imageUrl"] = f"/api/v1/images/{item['image_id']}" if item.get("image_id") else None
+        item["typeLabel"] = (maps["type"].get(item.get("type")) or {}).get("name") or item.get("type")
+        item["ageGroup"] = {"id": item.get("age_group_id"), "name": maps["age"].get(item.get("age_group_id"), "未分类")}
+        item["subject"] = {"id": item.get("subject_id"), "name": maps["subject"].get(item.get("subject_id"), "未分类")}
+        item["statusLabel"] = STATUS_LABELS.get(item.get("status"), item.get("status"))
+    return {"items": items}
 
 
 @router.get("/records")

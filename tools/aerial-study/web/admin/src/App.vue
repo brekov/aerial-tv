@@ -1,22 +1,31 @@
 <template>
-  <div v-if="mobile" class="mobile-shell"><router-view /></div>
-  <div v-else class="shell">
-    <aside class="sidebar">
-      <div class="brand">Aerial Study</div>
-      <nav>
-        <router-link to="/admin">概览</router-link>
-        <router-link to="/admin/taxonomy">分类</router-link>
-        <router-link to="/admin/materials">素材</router-link>
-        <router-link to="/admin/questions">题库</router-link>
-        <router-link to="/admin/records">答题记录</router-link>
-        <router-link to="/admin/wrong">错题本</router-link>
-      </nav>
-      <a class="ghost" href="/admin/logout">退出</a>
-    </aside>
-    <main class="content"><router-view /></main>
-  </div>
+<div v-if="isMobilePage" class="mobile-shell"><router-view /></div>
+<div v-else class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">A</span><span>Aerial Study</span></div>
+    <div class="nav-label">工作台</div>
+    <nav class="nav">
+      <router-link to="/admin" exact-active-class="active">概览</router-link>
+      <router-link to="/admin/questions" active-class="active">题库</router-link>
+      <router-link to="/admin/materials" active-class="active">素材库</router-link>
+      <router-link to="/admin/taxonomy" active-class="active">分类管理</router-link>
+      <router-link to="/admin/records" active-class="active">答题记录</router-link>
+      <router-link to="/admin/wrong" active-class="active">错题本</router-link>
+    </nav>
+    <div class="nav-label" style="margin-top:18px">设置</div>
+    <nav class="nav"><router-link to="/admin/settings">系统设置</router-link></nav>
+    <div class="side-foot"><strong>管理员</strong>NAS · Aerial Study v2<br><a href="/admin/logout" style="color:#9db0ca;text-decoration:none">退出登录</a></div>
+  </aside>
+  <main class="main"><router-view /></main>
+  <nav class="mobile-bottom">
+    <router-link to="/admin" exact-active-class="active">概览</router-link>
+    <router-link to="/admin/questions" active-class="active">题库</router-link>
+    <router-link to="/admin/materials" active-class="active">素材</router-link>
+    <router-link to="/admin/records" active-class="active">记录</router-link>
+  </nav>
+</div>
 </template>
 <script setup>
 import { computed } from 'vue'
-const mobile = computed(() => location.pathname.startsWith('/m/'))
+const isMobilePage = computed(() => location.pathname.startsWith('/m/'))
 </script>
