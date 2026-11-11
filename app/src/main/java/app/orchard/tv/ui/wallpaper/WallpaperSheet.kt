@@ -45,6 +45,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -112,6 +113,7 @@ import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.weather.Weather
 import app.orchard.tv.weather.WeatherKind
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -142,21 +144,35 @@ fun WallpaperSheet(
     var qr by remember { mutableStateOf<ImageBitmap?>(null) }
     var studyUploadUrl by remember { mutableStateOf<String?>(null) }
     var studyQr by remember { mutableStateOf<ImageBitmap?>(null) }
+    var studyExpiresAt by remember { mutableLongStateOf(0L) }
+    var studyRefresh by remember { mutableStateOf(0) }
+    var studyClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var showDaily by remember { mutableStateOf(false) }
     var showMimo by remember { mutableStateOf(false) }
+    var showDuration by remember { mutableStateOf(false) }
 
     BackHandler(enabled = visible, onBack = onDismiss)
 
     // The phone page listens all along (PhoneServer.listen); the address is read again each time,
     // as the TV's may have changed.
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, studyRefresh) {
         if (!visible) return@LaunchedEffect
         val url = withContext(Dispatchers.IO) { PhoneServer.start(context) }
         phoneUrl = url
         qr = url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
         val upload = withContext(Dispatchers.IO) { StudyClient.createUploadToken() }
-        studyUploadUrl = upload
-        studyQr = upload?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
+        studyUploadUrl = upload?.url
+        studyExpiresAt = upload?.expiresAt?.let { value ->
+            runCatching { java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli() }.getOrNull()
+        } ?: 0L
+        studyQr = upload?.url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
+        studyClock = System.currentTimeMillis()
+    }
+    LaunchedEffect(visible, studyExpiresAt) {
+        while (visible && studyExpiresAt > 0L) {
+            studyClock = System.currentTimeMillis()
+            delay(1_000)
+        }
     }
 
     val shown = remember { MutableTransitionState(false) }
@@ -242,18 +258,21 @@ fun WallpaperSheet(
                                 }
                             }
                         }
-                        val durations = listOf(3, 6, 10, 15, 20, 30)
-                        Choices(
-                            R.string.study_duration,
-                            stringResource(R.string.study_duration_hint),
-                            note,
-                            durations.map { it to stringResource(R.string.study_duration_value, it) },
-                            StudySettings.intervalMinutes,
-                            { minutes ->
-                                StudySettings.intervalMinutes = minutes
-                                StudySettings.resetWatch()
-                            },
-                        )
+                        val presetDurations = listOf(3, 6, 15)
+                        SettingRow(R.string.study_duration, stringResource(R.string.study_duration_hint), note) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                presetDurations.forEach { minutes ->
+                                    Chip(stringResource(R.string.study_duration_value, minutes), on = StudySettings.intervalMinutes == minutes) {
+                                        StudySettings.intervalMinutes = minutes
+                                        StudySettings.resetWatch()
+                                    }
+                                }
+                                Chip(
+                                    stringResource(R.string.study_duration_custom),
+                                    on = StudySettings.intervalMinutes !in presetDurations,
+                                ) { showDuration = true }
+                            }
+                        }
                         SettingRow(R.string.study_mimo, stringResource(R.string.study_mimo_hint), note) {
                             ActionChip(
                                 if (StudySettings.mimoConfigured) stringResource(R.string.study_mimo_set) else stringResource(R.string.study_mimo_unset),
@@ -262,7 +281,14 @@ fun WallpaperSheet(
                         }
                     }
                     }
-                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp))
+                    StudyQrCard(
+                        studyUploadUrl,
+                        studyQr,
+                        studyExpiresAt,
+                        studyClock,
+                        onRefresh = { studyRefresh++ },
+                        modifier = Modifier.width(190.dp),
+                    )
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -477,6 +503,22 @@ fun WallpaperSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 StudyMimoDialog(onClose = { showMimo = false })
+            }
+        }
+        if (showDuration) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).dismissOnTap { showDuration = false },
+                contentAlignment = Alignment.Center,
+            ) {
+                StudyDurationDialog(
+                    initial = StudySettings.intervalMinutes,
+                    onSave = { minutes ->
+                        StudySettings.intervalMinutes = minutes
+                        StudySettings.resetWatch()
+                        showDuration = false
+                    },
+                    onClose = { showDuration = false },
+                )
             }
         }
     }
@@ -844,7 +886,18 @@ private fun PhoneCard(url: String?, qr: ImageBitmap?) {
 
 /** Parent upload QR under the Study section; the Aerial personalization QR stays on the sheet's right. */
 @Composable
-private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Modifier) {
+private fun StudyQrCard(
+    url: String?,
+    qr: ImageBitmap?,
+    expiresAt: Long,
+    now: Long,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val remaining = if (expiresAt <= 0L) "" else {
+        val seconds = ((expiresAt - now) / 1000L).coerceAtLeast(0L)
+        "%02d:%02d".format(seconds / 60, seconds % 60)
+    }
     Column(modifier.padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(132.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
@@ -858,15 +911,15 @@ private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Mod
         }
         Spacer(Modifier.height(8.dp))
         BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
-        Spacer(Modifier.height(3.dp))
-        BasicText(
-            stringResource(R.string.study_phone_body),
-            style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
-        )
-        if (url != null) {
-            Spacer(Modifier.height(4.dp))
-            BasicText(url.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+        if (remaining.isNotEmpty()) {
+            Spacer(Modifier.height(3.dp))
+            BasicText(
+                stringResource(R.string.study_phone_expires, remaining),
+                style = Type.Caption.copy(color = if (remaining == "00:00") Color(0xFFFF8A80) else Palette.SecondaryLabel),
+            )
         }
+        Spacer(Modifier.height(4.dp))
+        ActionChip(stringResource(R.string.study_phone_refresh), Glyph.Download, onRefresh)
     }
 }
 

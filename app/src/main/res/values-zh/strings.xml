@@ -380,4 +380,10 @@
     <string name="study_phone_body">用手机扫码，把图片上传到 NAS 学习素材库。</string>
     <string name="study_phone_tv">电视设置</string>
     <string name="study_choice_prompt">请选择答案</string>
+    <string name="study_duration_custom">自定义</string>
+    <string name="study_duration_custom_title">自定义观看时长</string>
+    <string name="study_duration_custom_hint">1–120 分钟</string>
+    <string name="study_duration_save">保存</string>
+    <string name="study_phone_refresh">刷新二维码</string>
+    <string name="study_phone_expires">剩余 %1$s</string>
 </resources>

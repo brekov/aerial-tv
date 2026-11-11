@@ -381,4 +381,10 @@
     <string name="study_phone_body">Scan with your phone to upload pictures to the NAS Study library.</string>
     <string name="study_phone_tv">TV settings</string>
     <string name="study_choice_prompt">Choose an answer</string>
+    <string name="study_duration_custom">Custom</string>
+    <string name="study_duration_custom_title">Custom watch time</string>
+    <string name="study_duration_custom_hint">1–120 minutes</string>
+    <string name="study_duration_save">Save</string>
+    <string name="study_phone_refresh">Refresh QR code</string>
+    <string name="study_phone_expires">Remaining %1$s</string>
 </resources>

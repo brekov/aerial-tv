@@ -19,6 +19,7 @@ object StudyClient {
         val options: List<String> = emptyList(),
     )
     data class Session(val id: String, val questions: List<Question>)
+    data class UploadToken(val url: String, val expiresAt: String)
     data class Answer(
         val correct: Boolean,
         val score: Int,
@@ -109,13 +110,15 @@ object StudyClient {
     }
 
     /** Short-lived phone upload URL for materials; TV device token authorises it. */
-    fun createUploadToken(): String? = runCatching {
+    fun createUploadToken(): UploadToken? = runCatching {
         val c = open("/api/v1/study/upload-tokens", "POST")
         c.doOutput = true
         val body = JSONObject().put("maxUploads", 10).put("minutes", 10).toString()
         c.outputStream.use { it.write(body.toByteArray()) }
-        val json = JSONObject(read(c))
-        json.optJSONObject("token")?.optString("url")?.takeIf { it.isNotBlank() }
+        val token = JSONObject(read(c)).optJSONObject("token") ?: return@runCatching null
+        val url = token.optString("url")
+        if (url.isBlank()) return@runCatching null
+        UploadToken(url, token.optString("expiresAt"))
     }.getOrNull()
 
     fun transcribe(wav: ByteArray): String {
