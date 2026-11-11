@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -241,12 +243,12 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(18.dp))
                 SectionTitle(R.string.study_section)
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Column(Modifier.weight(1f)) {
-                    Group(modifier = Modifier.heightIn(min = 212.dp)) { note ->
+                    Group { note ->
                         SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
                             ActionChip(
                                 if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
@@ -285,7 +287,7 @@ fun WallpaperSheet(
                         }
                     }
                     }
-                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp).height(212.dp))
+                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp).fillMaxHeight())
                 }
 
                 Spacer(Modifier.height(6.dp))
