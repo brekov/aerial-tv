@@ -890,10 +890,10 @@ private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Mod
     Column(
         modifier.padding(top = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.Center,
     ) {
         Box(
-            Modifier.size(168.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
+            Modifier.size(150.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (qr != null) {
@@ -902,7 +902,7 @@ private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Mod
                 GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 30.dp)
             }
         }
-        // Title sits at the bottom edge so its baseline aligns with the left card border.
+        Spacer(Modifier.height(6.dp))
         BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
         if (url == null) {
             BasicText(
