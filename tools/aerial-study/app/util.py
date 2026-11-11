@@ -126,6 +126,17 @@ def match_answer(accepted: list[str], transcript: str) -> tuple[bool, str, dict[
     if candidate in accepted:
         return True, "exact", detail
 
+    # A child often repeats the target ("Ant. Ant." -> normalized "antant").
+    # Accept a short repeated form of the same answer, but only 2-3 repeats.
+    for target in accepted:
+        target_clean = _strip_edge_fillers(target)
+        if target_clean:
+            repeats = len(candidate) // len(target_clean)
+            if 2 <= repeats <= 3 and candidate == target_clean * repeats:
+                detail["repeated"] = repeats
+                detail["score"] = 100
+                return True, "exact", detail
+
     for target in accepted:
         target_clean = _strip_edge_fillers(target)
         if not target_clean:
@@ -204,6 +215,16 @@ def match_answer_full(
         return False, False, "exact", detail
     if candidate in accepted:
         return True, False, "exact", detail
+
+    # Repeated target ("Ant. Ant.") is a valid child response; normalization
+    # removes the space, so accept 2-3 concatenated copies of the same answer.
+    for target in accepted:
+        target_clean = _strip_edge_fillers(target)
+        if target_clean:
+            repeats = len(candidate) // len(target_clean)
+            if 2 <= repeats <= 3 and candidate == target_clean * repeats:
+                detail["repeated"] = repeats
+                return True, False, "exact", detail
 
     for target in accepted:
         target_clean = _strip_edge_fillers(target)
