@@ -243,51 +243,51 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(18.dp))
                 SectionTitle(R.string.study_section)
                 Row(
-                    Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                    Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Column(Modifier.weight(1f)) {
-                    Group { note ->
-                        SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
-                            ActionChip(
-                                if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
-                                if (studyEnabled) Glyph.Check else Glyph.Offline,
-                            ) {
-                                val on = !studyEnabled
-                                studyEnabled = on
-                                StudySettings.enabled = on
-                                if (on) {
-                                    StudyWatch.start(context)
-                                } else {
-                                    StudyOverlay.dismiss()
-                                }
-                            }
-                        }
-                        val presetDurations = listOf(3, 6, 15)
-                        SettingRow(R.string.study_duration, stringResource(R.string.study_duration_hint), note) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                presetDurations.forEach { minutes ->
-                                    Chip(stringResource(R.string.study_duration_value, minutes), on = StudySettings.intervalMinutes == minutes) {
-                                        StudySettings.intervalMinutes = minutes
-                                        StudySettings.resetWatch()
+                        Group { note ->
+                            SettingRow(R.string.study_switch, stringResource(R.string.study_switch_hint), note, first = true) {
+                                ActionChip(
+                                    if (studyEnabled) stringResource(R.string.study_on) else stringResource(R.string.study_off),
+                                    if (studyEnabled) Glyph.Check else Glyph.Offline,
+                                ) {
+                                    val on = !studyEnabled
+                                    studyEnabled = on
+                                    StudySettings.enabled = on
+                                    if (on) {
+                                        StudyWatch.start(context)
+                                    } else {
+                                        StudyOverlay.dismiss()
                                     }
                                 }
-                                Chip(
-                                    stringResource(R.string.study_duration_custom),
-                                    on = StudySettings.intervalMinutes !in presetDurations,
-                                ) { showDuration = true }
+                            }
+                            val presetDurations = listOf(3, 6, 15)
+                            SettingRow(R.string.study_duration, stringResource(R.string.study_duration_hint), note) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    presetDurations.forEach { minutes ->
+                                        Chip(stringResource(R.string.study_duration_value, minutes), on = StudySettings.intervalMinutes == minutes) {
+                                            StudySettings.intervalMinutes = minutes
+                                            StudySettings.resetWatch()
+                                        }
+                                    }
+                                    Chip(
+                                        stringResource(R.string.study_duration_custom),
+                                        on = StudySettings.intervalMinutes !in presetDurations,
+                                    ) { showDuration = true }
+                                }
+                            }
+                            SettingRow(R.string.study_mimo, stringResource(R.string.study_mimo_hint), note) {
+                                ActionChip(
+                                    if (StudySettings.mimoConfigured) stringResource(R.string.study_mimo_set) else stringResource(R.string.study_mimo_unset),
+                                    Glyph.Gear,
+                                ) { showMimo = true }
                             }
                         }
-                        SettingRow(R.string.study_mimo, stringResource(R.string.study_mimo_hint), note) {
-                            ActionChip(
-                                if (StudySettings.mimoConfigured) stringResource(R.string.study_mimo_set) else stringResource(R.string.study_mimo_unset),
-                                Glyph.Gear,
-                            ) { showMimo = true }
-                        }
                     }
-                    }
-                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp).fillMaxHeight())
+                    StudyQrCard(studyUploadUrl, studyQr, Modifier.width(190.dp))
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -887,13 +887,9 @@ private fun PhoneCard(url: String?, qr: ImageBitmap?) {
 /** Parent upload QR under the Study section; the Aerial personalization QR stays on the sheet's right. */
 @Composable
 private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Modifier) {
-    Column(
-        modifier.padding(top = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(132.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
+            Modifier.size(150.dp).smoothBackground(Color.White, 16.dp).padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (qr != null) {
@@ -902,9 +898,10 @@ private fun StudyQrCard(url: String?, qr: ImageBitmap?, modifier: Modifier = Mod
                 GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 30.dp)
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         BasicText(stringResource(R.string.study_phone_title), style = Type.Headline)
         if (url == null) {
+            Spacer(Modifier.height(4.dp))
             BasicText(
                 stringResource(R.string.wp_phone_offline),
                 style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
