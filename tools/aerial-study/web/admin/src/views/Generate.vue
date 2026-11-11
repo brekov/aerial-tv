@@ -25,7 +25,7 @@
     <div v-if="resultQuestions.length" style="margin-top:12px"><div style="font-size:12px;color:#7c8ba1;margin-bottom:6px">已生成草稿</div><div v-for="q in resultQuestions" :key="q.id" class="result-row"><img :src="q.image?.url"><div><b>{{q.answer}}</b><br><small>{{q.prompt}}</small></div></div><router-link class="btn ghost" style="width:100%;margin-top:10px" to="/admin/questions">去题库查看</router-link></div>
    </aside>
   </div>
- </div><div v-if="toast" class="toast">{{toast}}</div>
+ </div><div v-if="toast" :key="toast" class="toast">{{toast}}</div>
 </div>
 </template>
 <script setup>

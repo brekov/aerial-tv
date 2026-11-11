@@ -95,7 +95,7 @@
     <div class="drawer-foot"><button class="btn ghost" @click="active=null">取消</button><button class="btn" :disabled="saving" @click="save">{{ saving?'保存中…':'保存' }}</button></div>
   </aside>
 
-  <div v-if="toast" class="toast">{{ toast }}</div>
+  <div v-if="toast" :key="toast" class="toast">{{ toast }}</div>
 </div>
 </template>
 <script setup>
