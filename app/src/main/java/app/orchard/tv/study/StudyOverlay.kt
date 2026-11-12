@@ -55,9 +55,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
         @Volatile var active = false
             private set
-        @Volatile var choiceActive = false
-            private set
-
         /** Called from StudyWatch: false when Home Guard is not bound. */
         fun show(context: Context): Boolean {
             if (!StudySettings.enabled) return false
@@ -74,11 +71,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             instance?.dismissFromOutside()
             instance = null
         }
-
-        /** Test-only: show the scoring UI without waiting for a microphone answer. */
-        fun previewScore() {
-            instance?.showScorePreview()
-        }
     }
 
     private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -92,15 +84,11 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private lateinit var cue: ImageView
     private lateinit var leftCard: LinearLayout
     private lateinit var centerBlock: LinearLayout
-    private lateinit var choiceList: LinearLayout
-    private var choiceButtons: MutableList<TextView> = mutableListOf()
     private lateinit var wave: StudyWaveView
     private lateinit var playback: StudyPlaybackView
-    private lateinit var sadStar: ImageView
     private var cueAnimator: ValueAnimator? = null
     private enum class Cue { READY, LISTEN, SPEAK, PROCESS, CHECK, CROSS }
     private var speech: SpeechRecognizer? = null
-    private var session: StudyClient.Session? = null
     private var repeatSession: StudyClient.RepeatSession? = null
     private var transition: FrameLayout? = null
     private var index = 0
@@ -117,17 +105,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private val pass = Runnable { finish(true) }
     private val nextStep = Runnable {
         if (!closed) showRepeatCard()
-    }
-
-    private fun showScorePreview() {
-        if (closed) return
-        stopSpeech()
-        showCue(Cue.CHECK)
-        status.text = service.getString(R.string.study_score, 86)
-        status.setTextColor(Color.WHITE)
-        status.visibility = View.VISIBLE
-        title.text = service.getString(R.string.study_repeat_learning)
-        progress.progress = 1
     }
 
     internal fun show() {
@@ -308,20 +285,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         centerBlock.addView(cueHolder, LinearLayout.LayoutParams(-1, (100 * density).toInt()))
         centerBlock.addView(status, LinearLayout.LayoutParams(-1, -2))
-        choiceList = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-            setPadding(0, (10 * density).toInt(), 0, 0)
-        }
-        leftCard.addView(choiceList, LinearLayout.LayoutParams(-1, 0, 1f))
         leftCard.addView(centerBlock, LinearLayout.LayoutParams(-1, 0, 1f))
-        sadStar = ImageView(service).apply {
-            setImageResource(R.drawable.study_cue_star_sad)
-            visibility = View.GONE
-            contentDescription = "Sad star"
-        }
-        leftCard.addView(sadStar, LinearLayout.LayoutParams((56 * density).toInt(), (56 * density).toInt()).apply { gravity = Gravity.CENTER_HORIZONTAL })
-
         val imageStage = FrameLayout(service).apply {
             setPadding((14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
             // No white card and no pink border: the image sits directly on the same frosted glass.
@@ -430,7 +394,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             Cue.CROSS -> android.graphics.PorterDuffColorFilter(Color.rgb(255, 69, 58), android.graphics.PorterDuff.Mode.SRC_IN)
             else -> null
         }
-        if (::sadStar.isInitialized) sadStar.visibility = if (mode == Cue.CROSS) View.VISIBLE else View.GONE
         val showPlayback = mode == Cue.LISTEN
         playback.setActive(showPlayback)
         val showWave = mode == Cue.READY || mode == Cue.SPEAK
@@ -472,7 +435,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 if (closed) return@post
                 result.onSuccess { s ->
                     repeatSession = s
-                    session = null
                     index = 0
                     attempt = 0
                     if (s.cards.isEmpty()) {
@@ -519,8 +481,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         main.removeCallbacks(timeout)
         main.postDelayed(timeout, 120_000)
         hideCue()
-        choiceActive = false
-        choiceList.visibility = View.GONE
         centerBlock.visibility = View.VISIBLE
         progress.max = s.cards.size
         progress.progress = index + 1
@@ -614,73 +574,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
     }
 
-    private fun showQuestion() {
-        val s = session ?: return
-        val q = s.questions.getOrNull(index) ?: return finish(false)
-        stopSpeech()
-        main.removeCallbacks(nextStep)
-        wave.setActive(false)
-        playback.setActive(false)
-        progress.max = s.questions.size
-        progress.progress = index + 1
-        status.visibility = View.INVISIBLE
-        image.setImageBitmap(null)
-        if (q.text != null) title.text = q.text else title.text = service.getString(R.string.study_title)
-        if (q.imageUrl != null) io.execute {
-            val bmp: Bitmap? = StudyClient.loadImage(q.imageUrl)
-            main.post {
-                if (!closed) {
-                    image.setImageBitmap(bmp)
-                    image.post { syncLeftCardHeight() }
-                }
-            }
-        }
-        main.removeCallbacks(timeout)
-        main.postDelayed(timeout, 120_000)
-        if (q.answerMode == "choice") {
-            showChoice(q)
-            return
-        }
-        choiceActive = false
-        choiceList.visibility = View.GONE
-        centerBlock.visibility = View.VISIBLE
-        showCue(Cue.LISTEN)
-        if (!q.say.isNullOrBlank()) {
-            status.text = service.getString(R.string.study_listen_first)
-            status.setTextColor(Color.WHITE)
-            status.visibility = View.VISIBLE
-            // Keep the English target out of the Chinese instruction so the TTS cannot
-            // pronounce "lion" as the Chinese approximation "里昂".
-            StudyVoice.speak(service, service.getString(R.string.study_voice_listen_word)) {
-                main.post {
-                    if (closed) return@post
-                    StudyVoice.speakWord(service, q.say!!) {
-                        main.post { if (!closed) listen() }
-                    }
-                }
-            }
-        } else {
-            StudyVoice.speak(service, service.getString(R.string.study_voice_follow)) {
-                main.post { if (!closed) listen() }
-            }
-        }
-    }
-
-    private fun listen() {
-        if (closed) return
-        stopSpeech()
-        val generation = listenGeneration
-        showCue(Cue.READY)
-        status.text = service.getString(R.string.study_mic_ready)
-        status.setTextColor(Color.rgb(130, 220, 160))
-        status.visibility = View.VISIBLE
-        // Beep first, then let the microphone settle so the cue cannot become the answer.
-        StudyCue.start()
-        main.postDelayed({
-            if (!closed && generation == listenGeneration) startRecognizer(generation)
-        }, 350)
-    }
-
     private fun startRecognizer(generation: Int) {
         if (closed || generation != listenGeneration) return
         val component = ComponentName(service, AerialRecognitionService::class.java)
@@ -731,12 +624,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             override fun onResults(results: android.os.Bundle?) {
                 if (closed || generation != listenGeneration) return
                 listening = false
-                if (repeatSession != null) {
-                    submitRepeatAudio()
-                    return
-                }
-                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                if (text.isBlank()) retry("empty") else submit(text)
+                submitRepeatAudio()
             }
 
             override fun onPartialResults(partialResults: android.os.Bundle?) {}
@@ -748,7 +636,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-            putExtra(AerialRecognitionService.EXTRA_AUDIO_ONLY, true)
         }
         runCatching { recognizer.startListening(intent) }.onFailure {
             Log.w(TAG, "startListening", it)
@@ -756,124 +643,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
     }
 
-    private fun hideChoiceUi() {
-        choiceActive = false
-        if (::choiceList.isInitialized) choiceList.visibility = View.GONE
-        if (::centerBlock.isInitialized) centerBlock.visibility = View.VISIBLE
-    }
-
-    private fun showChoice(q: StudyClient.Question) {
-        choiceActive = true
-        centerBlock.visibility = View.GONE
-        choiceList.visibility = View.VISIBLE
-        choiceList.removeAllViews()
-        choiceButtons = mutableListOf()
-        val density = service.resources.displayMetrics.density
-        val prompt = TextView(service).apply {
-            text = service.getString(R.string.study_choice_prompt)
-            textSize = 16f
-            setTextColor(Color.rgb(130, 230, 160))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, (10 * density).toInt())
-        }
-        choiceList.addView(prompt, LinearLayout.LayoutParams(-1, -2))
-        q.options.forEachIndexed { index, option ->
-            val button = TextView(service).apply {
-                text = "${('A'.code + index).toChar()}. $option"
-                textSize = 17f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding((16 * density).toInt(), 0, (16 * density).toInt(), 0)
-                isFocusable = true
-                isClickable = true
-                background = GradientDrawable().apply {
-                    cornerRadius = 16 * density
-                    setColor(Color.argb(190, 30, 70, 130))
-                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(100, 160, 210, 255))
-                }
-                setOnFocusChangeListener { _, focused ->
-                    background = GradientDrawable().apply {
-                        cornerRadius = 16 * density
-                        setColor(if (focused) Color.rgb(80, 160, 255) else Color.argb(190, 30, 70, 130))
-                        setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(if (focused) 220 else 100, 255, 255, 255))
-                    }
-                }
-                setOnClickListener { submit("", index) }
-            }
-            choiceButtonsAdd(button, density)
-        }
-        choiceButtons.firstOrNull()?.requestFocus()
-    }
-
-    private fun choiceButtonsAdd(button: TextView, density: Float) {
-        choiceButtons.add(button)
-        choiceList.addView(button, LinearLayout.LayoutParams(-1, (48 * density).toInt()).apply {
-            bottomMargin = (8 * density).toInt()
-        })
-    }
-
-    private fun submit(transcript: String, selectedOption: Int? = null) {
-        val s = session ?: return
-        val q = s.questions.getOrNull(index) ?: return
-        showCue(Cue.PROCESS)
-        status.text = service.getString(R.string.study_recognizing)
-        status.setTextColor(Color.LTGRAY)
-        status.visibility = View.VISIBLE
-        main.removeCallbacks(timeout)
-        io.execute {
-            val answer = runCatching {
-                StudyClient.answer(
-                    s.id, q.id, transcript,
-                    if (selectedOption == null) StudyAudioBus.take() else null,
-                    selectedOption,
-                )
-            }
-            main.post {
-                if (closed) return@post
-                answer.onSuccess { a ->
-                    if (a.retry) {
-                        hideChoiceUi()
-                        // Near pronunciation miss: repeat the model word and listen to the same card.
-                        showCue(Cue.READY)
-                        announce(R.string.study_voice_retry) {
-                            main.postDelayed({ if (!closed) showQuestion() }, 300)
-                        }
-                        return@post
-                    }
-                    if (a.restart || !a.correct) {
-                        hideChoiceUi()
-                        showCue(Cue.CROSS)
-                        val wrong = service.getString(R.string.study_wrong_hint)
-                        announce(R.string.study_voice_wrong, wrong) {
-                            main.postDelayed({ if (!closed) startSession() }, 500)
-                        }
-                        return@post
-                    }
-                    hideChoiceUi()
-                    index = a.progress
-                    if (a.finished || index >= s.questions.size) {
-                        main.removeCallbacks(timeout)
-                        showCue(Cue.CHECK)
-                        announce(R.string.study_voice_passed) { main.postDelayed(pass, 600) }
-                    } else {
-                        showCue(Cue.CHECK)
-                        val shownScore = a.pronunciationOverall ?: a.score
-                        val display = service.getString(R.string.study_right) + " · " +
-                            service.getString(R.string.study_score, shownScore) + "\n" +
-                            service.getString(R.string.study_next_auto)
-                        announce(R.string.study_voice_right, display, { scheduleNext() })
-                    }
-                }.onFailure {
-                    Log.w(TAG, "answer failed", it)
-                    hideChoiceUi()
-                    showCue(Cue.CROSS)
-                    announce(R.string.study_voice_error) { retryLater() }
-                }
-            }
-        }
-    }
-
-    /** Show text and speak the same reminder; only continue after the voice has finished. */
     private fun announce(res: Int, display: String? = null, then: (() -> Unit)? = null) {
         val text = service.getString(res)
         status.setTextColor(Color.WHITE)
@@ -895,7 +664,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         announce(voice) {
             if (attempt <= 3) main.postDelayed({
                 if (!closed) {
-                    if (repeatSession != null) showRepeatCard() else listen()
+                    showRepeatCard()
                 }
             }, 500)
             else retryLater()
@@ -911,7 +680,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         if (closed) return
         closed = true
         active = false
-        choiceActive = false
         main.removeCallbacks(timeout)
         main.removeCallbacks(pass)
         stopSpeech()

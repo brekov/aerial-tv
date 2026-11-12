@@ -345,8 +345,6 @@
     <string name="study_switch_hint">观看设定时间后弹出 5 道看图识字题，全部答对才能继续观看。</string>
     <string name="study_on">已开启</string>
     <string name="study_off">已关闭</string>
-    <string name="study_voice_right">答对了</string>
-    <string name="study_voice_wrong">答错了，重新开始</string>
     <string name="study_voice_no_speech">没有听清，请再说一次</string>
     <string name="study_voice_error">学习服务暂时不可用</string>
     <string name="study_voice_passed">全部答对，可以继续观看</string>
@@ -365,21 +363,15 @@
     <string name="study_mic_ready">请开始说</string>
     <string name="study_mic_listening">正在聆听……</string>
     <string name="study_mic_processing">识别中…</string>
-    <string name="study_listen_first">先听一遍</string>
     <string name="study_voice_retry">再读一次</string>
-    <string name="study_voice_listen_follow">请听：%1$s。听完后请跟读。</string>
-    <string name="study_voice_follow">请跟我读。</string>
     <string name="study_repeat">重读</string>
     <string name="study_next">下一题</string>
     <string name="study_score">%1$d 分</string>
     <string name="study_wrong_hint">发音不正确
 请再试一次，注意发音哦~</string>
-    <string name="study_next_auto">下一题将自动开始…</string>
-    <string name="study_voice_listen_word">请听单词，然后跟读。</string>
     <string name="study_phone_title">手机上传学习素材</string>
     <string name="study_phone_body">用手机扫码，把图片上传到 NAS 学习素材库。</string>
     <string name="study_phone_tv">电视设置</string>
-    <string name="study_choice_prompt">请选择答案</string>
     <string name="study_duration_custom">自定义</string>
     <string name="study_duration_custom_title">自定义观看时长</string>
     <string name="study_duration_custom_hint">1–120 分钟</string>

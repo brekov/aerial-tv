@@ -315,8 +315,6 @@
     <string name="study_switch_hint">Белгіленген қарау уақытынан кейін қарауды жалғастыру үшін сурет бойынша бес сұраққа жауап беріңіз.</string>
     <string name="study_on">Қосулы</string>
     <string name="study_off">Өшірулі</string>
-    <string name="study_voice_right">Дұрыс</string>
-    <string name="study_voice_wrong">Қате, қайта бастаймыз</string>
     <string name="study_voice_no_speech">Естілмеді, қайталаңыз</string>
     <string name="study_voice_error">Оқу қызметі уақытша қолжетімсіз</string>
     <string name="study_voice_passed">Барлығы дұрыс, қарауды жалғастыруға болады</string>
@@ -335,15 +333,10 @@
     <string name="study_mic_ready">Жауапты айтыңыз</string>
     <string name="study_mic_listening">Тыңдап тұрмын…</string>
     <string name="study_mic_processing">Тану…</string>
-    <string name="study_listen_first">Алдымен тыңдаңыз</string>
     <string name="study_voice_retry">Қайта оқыңыз</string>
-    <string name="study_voice_listen_follow">Тыңдаңыз: %1$s. Содан кейін қайталаңыз.</string>
-    <string name="study_voice_follow">Менен кейін қайталаңыз.</string>
     <string name="study_repeat">Қайталау</string>
     <string name="study_next">Келесі</string>
     <string name="study_score">%1$d балл</string>
     <string name="study_wrong_hint">Дұрыс емес
 Қайтадан көріңіз, айтылымға назар аударыңыз</string>
-    <string name="study_next_auto">Келесі сұрақ автоматты түрде басталады…</string>
-    <string name="study_voice_listen_word">Сөзді тыңдап, кейін қайталаңыз.</string>
 </resources>

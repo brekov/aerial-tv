@@ -8,8 +8,6 @@ isolated temporary DATA_DIR.
 from __future__ import annotations
 
 import base64
-import io
-import wave
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,33 +34,6 @@ def make_wav(seconds: float = 0.2, sample_rate: int = 16000) -> bytes:
     return buffer.getvalue()
 
 
-class FakeAsr:
-    """Drop-in replacement for AsrEngine used by API tests."""
-
-    def __init__(self, text: str = "apple", error: Exception | None = None) -> None:
-        self.text = text
-        self.error = error
-        self.calls: list[dict] = []
-
-    def transcribe_bytes(self, data: bytes, *, suffix: str = ".wav", language=None) -> dict:
-        self.calls.append({"size": len(data), "suffix": suffix, "language": language})
-        if self.error:
-            raise self.error
-        return {"text": self.text, "language": "en", "audioSeconds": 0.2}
-
-    def status(self) -> dict:
-        return {
-            "available": True,
-            "model": "fake",
-            "device": "cpu",
-            "computeType": "int8",
-            "language": "auto",
-            "loaded": True,
-            "queued": 0,
-            "busy": False,
-            "queueCapacity": 8,
-            "loadError": None,
-        }
 
 
 @pytest.fixture
@@ -78,7 +49,6 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setenv("XIAOMI_MIMO_API_KEY", "")
     monkeypatch.setenv("XIAOMI_MIMO_BASE_URL", "")
     monkeypatch.setenv("XIAOMI_MIMO_MODEL", "")
-    monkeypatch.setenv("ASR_MODEL", "tiny")
     monkeypatch.setenv("GENERATION_INLINE", "1")
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
     monkeypatch.setenv("QUESTIONS_PER_SESSION", "5")

@@ -315,8 +315,6 @@
     <string name="study_switch_hint">После заданного времени просмотра ответьте на пять вопросов по картинкам, чтобы продолжить.</string>
     <string name="study_on">Вкл.</string>
     <string name="study_off">Выкл.</string>
-    <string name="study_voice_right">Верно</string>
-    <string name="study_voice_wrong">Неверно, начинаем заново</string>
     <string name="study_voice_no_speech">Я не расслышал, повторите</string>
     <string name="study_voice_error">Учебный сервис временно недоступен</string>
     <string name="study_voice_passed">Всё верно, можно продолжать</string>
@@ -335,15 +333,10 @@
     <string name="study_mic_ready">Скажите ответ</string>
     <string name="study_mic_listening">Слушаю…</string>
     <string name="study_mic_processing">Распознавание…</string>
-    <string name="study_listen_first">Сначала послушайте</string>
     <string name="study_voice_retry">Прочитайте ещё раз</string>
-    <string name="study_voice_listen_follow">Послушайте: %1$s. Затем повторите.</string>
-    <string name="study_voice_follow">Повторите за мной.</string>
     <string name="study_repeat">Повторить</string>
     <string name="study_next">Далее</string>
     <string name="study_score">%1$d балл</string>
     <string name="study_wrong_hint">Неправильно
 Попробуй ещё раз, следи за произношением</string>
-    <string name="study_next_auto">Следующий вопрос начнётся автоматически…</string>
-    <string name="study_voice_listen_word">Послушайте слово, затем повторите.</string>
 </resources>

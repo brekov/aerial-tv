@@ -2,21 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any
 
-from .audio_judge import judge_audio
 from .config import Settings
 from .db import read_session, session
 from .questions import (
     count_active,
     get_question,
     get_questions_by_ids,
-    judge_transcript,
     question_public_dict,
     select_active_questions,
 )
-from .util import iso, json_dumps, new_id, normalize_answer, parse_iso, safe_json_loads, split_accepted_answers, utcnow
+from .util import iso, parse_iso, safe_json_loads, utcnow
 
 
 class SessionError(Exception):
@@ -28,65 +25,6 @@ class SessionError(Exception):
 
 def _now() -> str:
     return iso(utcnow())
-
-
-def create_session(
-    settings: Settings,
-    *,
-    device_id: str = "",
-    age_group_id: int | None = None,
-    subject_id: int | None = None,
-    answer_mode: str | None = None,
-    question_type_code: str | None = None,
-    count: int | None = None,
-) -> dict[str, Any]:
-    needed = max(1, min(int(count or settings.questions_per_session), settings.questions_per_session))
-    selected = select_active_questions(
-        settings,
-        needed,
-        age_group_id=age_group_id,
-        subject_id=subject_id,
-        answer_mode=answer_mode,
-        question_type_code=question_type_code,
-    )
-    if len(selected) < needed:
-        raise SessionError(
-            f"not enough matching active questions: need {needed}, have {len(selected)}; "
-            "activate questions in the admin page first",
-            status_code=409,
-        )
-    question_ids = [question["id"] for question in selected]
-    session_id = new_id()
-    now = utcnow()
-    created_at = iso(now)
-    expires_at = iso(now + timedelta(hours=settings.session_ttl_hours))
-    with session(settings) as conn:
-        conn.execute(
-            """
-            INSERT INTO quiz_sessions(
-                id, device_id, status, question_ids_json, current_index,
-                correct_count, wrong_count, restarts, created_at, updated_at,
-                expires_at)
-            VALUES(?, ?, 'active', ?, 0, 0, 0, 0, ?, ?, ?)
-            """,
-            (
-                session_id,
-                device_id[:128],
-                json_dumps(question_ids),
-                created_at,
-                created_at,
-                expires_at,
-            ),
-        )
-    row = get_session_row(settings, session_id)
-    assert row is not None
-    return {
-        "session": _session_header(row),
-        "questions": [
-            question_public_dict(settings, question, session_id) for question in selected
-        ],
-        "expiresAt": row["expires_at"],
-    }
 
 
 def get_session_row(settings: Settings, session_id: str) -> dict[str, Any] | None:
@@ -135,15 +73,6 @@ def _session_header(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_session(settings: Settings, session_id: str) -> dict[str, Any]:
-    row = get_session_row(settings, session_id)
-    if not row:
-        raise SessionError("session not found", status_code=404)
-    if is_expired(row) and row["status"] != "finished":
-        raise SessionError("session expired", status_code=410)
-    return row
-
-
 def session_view(
     settings: Settings, row: dict[str, Any], *, include_questions: bool = True
 ) -> dict[str, Any]:
@@ -167,179 +96,6 @@ def _next_question_payload(
     if question is None:
         return None
     return question_public_dict(settings, question, row["id"])
-
-
-def submit_answer(
-    settings: Settings,
-    session_id: str,
-    *,
-    question_id: int,
-    transcript: str,
-    audio: bytes | None = None,
-    selected_option: int | None = None,
-    allow_ai_judge: bool = True,
-) -> dict[str, Any]:
-    row = load_session(settings, session_id)
-    if row["status"] == "finished":
-        raise SessionError("session already finished", status_code=409)
-    question_ids = [int(value) for value in safe_json_loads(row["question_ids_json"], [])]
-    current_index = int(row.get("current_index") or 0)
-    if current_index >= len(question_ids):
-        raise SessionError("session already finished", status_code=409)
-    expected_question_id = question_ids[current_index]
-    if int(question_id) != expected_question_id:
-        raise SessionError(
-            f"wrong question: expected question {expected_question_id} at index {current_index}",
-            status_code=409,
-        )
-    question = get_question(settings, expected_question_id)
-    if not question:
-        raise SessionError("question no longer exists", status_code=410)
-
-    if question.get("answer_mode") == "choice":
-        options = safe_json_loads(question.get("options_json"), [])
-        if selected_option is None or not isinstance(selected_option, int) or not 0 <= selected_option < len(options):
-            raise SessionError("a valid selectedOption is required for this question", status_code=422)
-        accepted = split_accepted_answers(str(question.get("answer") or ""))
-        correct = normalize_answer(str(options[selected_option])) in {normalize_answer(item) for item in accepted}
-        judge_method = "choice"
-        judge_detail = {"selectedOption": selected_option, "selectedText": options[selected_option], "score": 100 if correct else 0}
-    else:
-        correct, judge_method, judge_detail = judge_transcript(
-            settings,
-            question,
-            transcript,
-            allow_ai=allow_ai_judge,
-        )
-    score = int(judge_detail.get("score") or 0)
-
-    audio_result: dict[str, Any] | None = None
-    audio_retry = False
-    if audio:
-        accepted = question.get("answer", "")
-        word = accepted.split("|", 1)[0].strip() if accepted else ""
-        audio_result = judge_audio(settings, reference=accepted, word=word, audio=audio)
-        if audio_result:
-            judge_detail["audioJudge"] = audio_result
-            pronunciation = audio_result.get("pronunciation") or {}
-            overall = pronunciation.get("overall")
-            # High-confidence audio veto for gross mispronunciations.  The
-            # normal "near" case remains coaching only until thresholds are
-            # calibrated on real children.
-            if (
-                correct
-                and isinstance(overall, int)
-                and overall < 50
-                and audio_result.get("verdict") == "wrong"
-                and float(audio_result.get("confidence") or 0.0) >= 0.85
-            ):
-                correct = False
-                audio_retry = True
-                judge_method = "near_miss"
-                judge_detail["retry"] = True
-                judge_detail["audioTriggeredRetry"] = True
-                score = overall
-
-    now = utcnow()
-    timestamp = iso(now)
-    finished = False
-    retry = bool(judge_detail.get("retry")) or audio_retry
-    with session(settings) as conn:
-        attempt_no = (
-            conn.execute(
-                "SELECT COUNT(*) FROM quiz_attempts WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()[0]
-            + 1
-        )
-        if retry:
-            prior_retries = conn.execute(
-                "SELECT COUNT(*) FROM quiz_attempts WHERE session_id = ? AND question_id = ? AND judge_method = 'near_miss'",
-                (session_id, expected_question_id),
-            ).fetchone()[0]
-            if prior_retries >= 1:
-                # Only one follow-along retry per question; the second near miss is a wrong answer.
-                retry = False
-                judge_detail = {**judge_detail, "retryLimitReached": True}
-        conn.execute(
-            """
-            INSERT INTO quiz_attempts(
-                session_id, question_id, attempt_no, transcript, correct,
-                judge_method, judge_detail_json, created_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                session_id,
-                expected_question_id,
-                attempt_no,
-                (transcript or "")[:2000],
-                1 if correct else 0,
-                judge_method,
-                json_dumps(judge_detail),
-                timestamp,
-            ),
-        )
-        if retry:
-            # Near miss: keep the same question and the same five-question progress.
-            pass
-        elif correct:
-            next_index = current_index + 1
-            finished = next_index >= len(question_ids)
-            conn.execute(
-                """
-                UPDATE quiz_sessions
-                SET current_index = ?, correct_count = correct_count + 1,
-                    status = ?, updated_at = ?, finished_at = ?
-                WHERE id = ?
-                """,
-                (
-                    next_index,
-                    "finished" if finished else "active",
-                    timestamp,
-                    timestamp if finished else None,
-                    session_id,
-                ),
-            )
-        else:
-            # A wrong answer restarts the same five-question run from the start.
-            conn.execute(
-                """
-                UPDATE quiz_sessions
-                SET current_index = 0, wrong_count = wrong_count + 1,
-                    restarts = restarts + 1, status = 'active', updated_at = ?
-                WHERE id = ?
-                """,
-                (timestamp, session_id),
-            )
-    row = get_session_row(settings, session_id)
-    assert row is not None
-    result: dict[str, Any] = {
-        "correct": bool(correct),
-        "score": max(0, min(100, score)),
-        "retry": bool(retry),
-        "progress": progress(row),
-        # A retry keeps the current question; it is not a restart.
-        "finished": bool(finished),
-        "restart": not bool(correct) and not bool(retry),
-        "questionId": expected_question_id,
-        "judgeMethod": judge_method,
-        "session": _session_header(row),
-    }
-    if audio_result:
-        result["mimoJudge"] = {
-            "verdict": audio_result.get("verdict"),
-            "confidence": audio_result.get("confidence"),
-            "heard": audio_result.get("heard"),
-            "issues": audio_result.get("issues"),
-            "feedback": audio_result.get("feedback"),
-        }
-        result["pronunciation"] = audio_result.get("pronunciation")
-        result["decision"] = "pass" if correct else ("retry" if retry else "restart")
-        result["audioShadow"] = True
-    if correct and not finished:
-        next_question = get_question(settings, question_ids[current_index + 1])
-        result["nextQuestion"] = _next_question_payload(settings, row, next_question)
-    return result
 
 
 def list_sessions(

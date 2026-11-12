@@ -315,8 +315,6 @@
     <string name="study_switch_hint">Після заданого часу перегляду дайте відповіді на п’ять запитань за картинками, щоб продовжити.</string>
     <string name="study_on">Увімк.</string>
     <string name="study_off">Вимк.</string>
-    <string name="study_voice_right">Правильно</string>
-    <string name="study_voice_wrong">Неправильно, починаємо знову</string>
     <string name="study_voice_no_speech">Я не почув, повторіть</string>
     <string name="study_voice_error">Навчальний сервіс тимчасово недоступний</string>
     <string name="study_voice_passed">Усе правильно, можна продовжувати</string>
@@ -335,15 +333,10 @@
     <string name="study_mic_ready">Скажіть відповідь</string>
     <string name="study_mic_listening">Слухаю…</string>
     <string name="study_mic_processing">Розпізнавання…</string>
-    <string name="study_listen_first">Спочатку послухайте</string>
     <string name="study_voice_retry">Прочитайте ще раз</string>
-    <string name="study_voice_listen_follow">Послухайте: %1$s. Потім повторіть.</string>
-    <string name="study_voice_follow">Повторіть за мною.</string>
     <string name="study_repeat">Повторити</string>
     <string name="study_next">Далі</string>
     <string name="study_score">%1$d бал</string>
     <string name="study_wrong_hint">Неправильно
 Спробуй ще раз, стеж за вимовою</string>
-    <string name="study_next_auto">Наступне питання почнеться автоматично…</string>
-    <string name="study_voice_listen_word">Прослухайте слово, потім повторіть.</string>
 </resources>

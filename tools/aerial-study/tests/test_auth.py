@@ -7,42 +7,6 @@ from fastapi.testclient import TestClient
 from tests.conftest import ADMIN_PASSWORD, DEVICE_TOKEN
 
 
-def test_session_requires_device_token(client, seeded):
-    response = client.post("/api/v1/sessions", json={})
-    assert response.status_code == 401
-
-    response = client.post("/api/v1/sessions", json={}, headers={"X-Study-Token": "wrong"})
-    assert response.status_code == 401
-
-    # The token may also arrive in the JSON body, as the TV design specifies.
-    response = client.post("/api/v1/sessions", json={"token": DEVICE_TOKEN})
-    assert response.status_code == 201
-
-
-def test_get_session_and_answer_require_token(client, tv_client, seeded):
-    created = tv_client.post("/api/v1/sessions", json={})
-    assert created.status_code == 201
-    session = created.json()
-    first_question = session["questions"][0]
-
-    assert client.get(f"/api/v1/sessions/{session['session']['id']}").status_code == 401
-    assert (
-        client.post(
-            f"/api/v1/sessions/{session['session']['id']}/answer",
-            json={"questionId": first_question["id"], "transcript": "x"},
-        ).status_code
-        == 401
-    )
-    # invalid token is rejected too
-    assert (
-        client.get(
-            f"/api/v1/sessions/{session['session']['id']}",
-            headers={"Authorization": "Bearer nope"},
-        ).status_code
-        == 401
-    )
-
-
 def test_admin_api_requires_login(client):
     response = client.get("/api/v1/admin/questions")
     assert response.status_code == 401

@@ -14,9 +14,6 @@ def test_health_reports_components_without_secrets(client):
     assert payload["database"] == "ok"
     assert payload["auth"]["deviceTokenRequired"] is True
     assert payload["auth"]["adminConfigured"] is True
-    assert payload["asr"]["model"] == "tiny"
-    assert payload["asr"]["device"] == "cpu"
-    assert payload["asr"]["computeType"] == "int8"
     assert "providers" in payload["ai"]
     # Secrets must never appear in a health payload.
     assert ADMIN_PASSWORD not in response.text
@@ -34,9 +31,7 @@ def test_openapi_available(client):
     response = client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert "/api/v1/sessions" in paths
-    assert "/api/v1/sessions/{session_id}" in paths
-    assert "/api/v1/sessions/{session_id}/answer" in paths
-    assert "/api/v1/asr" in paths
+    assert "/api/v1/repeat-learning/sessions" in paths
+    assert "/api/v1/repeat-learning/sessions/{session_id}/attempts" in paths
     assert "/api/v1/admin/materials" in paths
     assert "/api/v1/admin/questions" in paths

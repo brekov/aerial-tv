@@ -59,42 +59,6 @@ object StudyVoice {
         }
     }
 
-    /** Play only the target word with an English voice, never the Chinese instruction. */
-    fun speakWord(context: Context, text: String, onDone: () -> Unit) {
-        val app = context.applicationContext
-        main.post {
-            val gen = ++generation
-            releaseCurrent()
-            if (StudySettings.mimoConfigured) {
-                val cached = cachedWordFile(app, text)
-                if (cached != null && cached.length() > 0) {
-                    playFile(app, gen, "word:$text", cached, onDone, deleteOnDone = false)
-                    return@post
-                }
-                Thread({
-                    val audio = runCatching { MimoClient.synthesizeWord(text) }
-                        .onFailure { Log.w(TAG, "MiMo word TTS failed; using Android English TTS", it) }
-                        .getOrNull()
-                    main.post {
-                        if (gen != generation) return@post
-                        if (audio != null && audio.isNotEmpty()) {
-                            val target = cachedWordFile(app, text)
-                            if (target != null && runCatching { target.writeBytes(audio) }.isSuccess) {
-                                playFile(app, gen, "word:$text", target, onDone, deleteOnDone = false)
-                            } else {
-                                playWav(app, gen, "word:$text", audio, onDone)
-                            }
-                        } else {
-                            androidSpeak(app, gen, text, onDone, Locale.ENGLISH)
-                        }
-                    }
-                }, "study-word-tts").apply { isDaemon = true }.start()
-            } else {
-                androidSpeak(app, gen, text, onDone, Locale.ENGLISH)
-            }
-        }
-    }
-
     /** Speak the word, then spell its letters; used by repeat-learning. */
     fun speakSpelling(context: Context, word: String, letters: List<String>, onDone: () -> Unit) {
         val app = context.applicationContext
@@ -145,13 +109,6 @@ object StudyVoice {
             releaseCurrent()
         }
     }
-
-    private fun cachedWordFile(context: Context, text: String): File? = runCatching {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest("word|$text|${StudySettings.mimoTtsModel}|${StudySettings.mimoVoice}".toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        File(context.cacheDir, "study-word-$digest.wav")
-    }.getOrNull()
 
     private fun cachedFile(context: Context, text: String): File? = runCatching {
         val digest = MessageDigest.getInstance("SHA-256")

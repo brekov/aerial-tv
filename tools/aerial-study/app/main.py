@@ -20,7 +20,6 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import api_admin, api_public, api_repeat, db, web_admin
-from .asr import AsrEngine, AsrError
 from .config import Settings
 from .generation import GenerationError, GenerationService
 from .materials import MaterialError
@@ -39,7 +38,6 @@ _ERROR_TYPES = (
     SessionError,
     RepeatLearningError,
     TaxonomyError,
-    AsrError,
     GenerationError,
 )
 
@@ -70,21 +68,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _configure_logging(settings)
     db.init_db(settings)
 
-    asr_engine = AsrEngine(settings)
     generation_service = GenerationService(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         logger.info(
-            "aerial-study %s starting (data=%s, deviceAuth=%s, adminConfigured=%s, "
-            "asr=%s/%s/%s, aiDefault=%s)",
+            "aerial-study %s starting (data=%s, deviceAuth=%s, adminConfigured=%s, aiDefault=%s)",
             settings.version,
             settings.data_dir,
             settings.device_auth_enabled,
             settings.admin_configured,
-            settings.asr_model,
-            settings.asr_device,
-            settings.asr_compute_type,
             settings.default_provider,
         )
         yield
@@ -94,8 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Aerial Study Guard",
         description=(
-            "LAN service for the Aerial TV Study Guard feature: speech-to-text, "
-            "word-image quiz sessions and admin-managed question material."
+            "LAN service for Aerial TV repeat-learning and admin-managed material."
         ),
         version=settings.version,
         lifespan=lifespan,
@@ -103,7 +95,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = settings
-    app.state.asr = asr_engine
     app.state.generation = generation_service
     app.state.started_at = time.monotonic()
 

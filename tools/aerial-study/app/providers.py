@@ -382,50 +382,6 @@ def generate_word_image_questions(
     if not questions:
         raise ProviderError("AI reply contained no usable questions")
     return questions, config
-
-
-def judge_answer_ai(
-    settings: Settings,
-    *,
-    question_prompt: str,
-    reference_answer: str,
-    transcript: str,
-) -> bool | None:
-    """Optional text judging fallback.  Returns None when AI is unavailable."""
-    if not ai_judge_enabled(settings):
-        return None
-    try:
-        config = get_provider_config(settings, None)
-    except ProviderError:
-        return None
-    if not config.configured:
-        return None
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You grade a student's spoken answer. The reference answer may "
-                "list alternatives. Ignore case, punctuation and articles. "
-                "Reply with exactly YES or NO."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Question: {question_prompt}\n"
-                f"Reference answer(s): {reference_answer}\n"
-                f"Student answer: {transcript}\n"
-                "Is the student answer correct?"
-            ),
-        },
-    ]
-    try:
-        raw = _chat(config, messages, temperature=0.0, max_tokens=8)
-    except ProviderError:
-        return None
-    return raw.strip().upper().startswith("YES")
-
-
 def generate_choice_questions(
     settings: Settings,
     *,

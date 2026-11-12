@@ -25,7 +25,6 @@ object StudySettings {
     /** No server address is assumed; set one before enabling. */
     const val DEFAULT_URL = "http://saboop.local:8900"
     const val DEFAULT_INTERVAL_MIN = 6
-    const val QUESTIONS = 5
     const val DEFAULT_MIMO_BASE = "https://api.xiaomimimo.com/v1"
     const val DEFAULT_MIMO_ASR_MODEL = "mimo-v2.5-asr"
     const val DEFAULT_MIMO_TTS_MODEL = "mimo-v2.5-tts"

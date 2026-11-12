@@ -149,20 +149,6 @@ def test_admin_pages_render(admin_client, client):
     assert "admin.js" in admin_page.text
 
 
-def test_admin_session_history(admin_client, tv_client, seeded):
-    session = tv_client.post("/api/v1/sessions", json={}).json()
-    session_id = session["session"]["id"]
-
-    listed = admin_client.get("/api/v1/admin/sessions").json()
-    assert listed["total"] == 1
-    assert listed["items"][0]["id"] == session_id
-    assert listed["items"][0]["attemptCount"] == 0
-
-    detail = admin_client.get(f"/api/v1/admin/sessions/{session_id}")
-    assert detail.status_code == 200
-    assert detail.json()["attempts"] == []
-    assert admin_client.get("/api/v1/admin/sessions/unknown").status_code == 404
-
 
 def test_list_filters_and_pagination(admin_client, image_factory):
     image = image_factory()

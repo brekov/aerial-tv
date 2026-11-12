@@ -160,28 +160,6 @@ def test_provider_settings_update(admin_client):
     assert admin_client.get("/api/v1/admin/providers").json()["aiJudgeEnabled"] is True
 
 
-def test_optional_ai_text_judge(admin_client, image_factory, app, monkeypatch):
-    from app.providers import judge_answer_ai
-    from app.questions import judge_transcript
-
-    settings = app.state.settings
-    # Disabled by default: no AI call, no fallback.
-    assert (
-        judge_answer_ai(
-            settings, question_prompt="What?", reference_answer="apple", transcript="aple"
-        )
-        is None
-    )
-
-    admin_client.put("/api/v1/admin/settings", json={"aiJudgeEnabled": True})
-    monkeypatch.setattr("app.providers._chat", lambda *args, **kwargs: "YES")
-    correct, method, detail = judge_transcript(
-        settings, {"prompt": "What is this?", "answer": "apple"}, "aple"
-    )
-    assert correct is True
-    assert method == "ai"
-    assert detail["aiJudge"] is True
-
 
 def test_generation_async_worker_path(app, admin_client, image_factory, monkeypatch):
     import time

@@ -10,13 +10,10 @@ from typing import Any
 from .config import Settings
 from .db import read_session, session
 from .materials import admin_material_dict, get_image_material, material_public_dict
-from .providers import judge_answer_ai
 from .taxonomy import TaxonomyError, age_group_exists, parse_category, question_type as get_question_type, subject_exists
 from .util import (
     iso,
     json_dumps,
-    match_answer,
-    match_answer_full,
     normalize_answer,
     safe_json_loads,
     split_accepted_answers,
@@ -606,42 +603,3 @@ def revision_admin_dict(revision: dict[str, Any]) -> dict[str, Any]:
         "changeNote": revision["change_note"],
         "createdAt": revision["created_at"],
     }
-
-
-def judge_transcript(
-    settings: Settings,
-    question: dict[str, Any],
-    transcript: str,
-    *,
-    allow_ai: bool = True,
-) -> tuple[bool, str, dict[str, Any]]:
-    """Grade a transcript.
-
-    Exact matching accepts alternatives separated by ``|``.  When enabled and
-    the exact match fails, an optional AI text judge can be consulted.
-    """
-    normalized = normalize_answer(transcript)
-    accepted = split_accepted_answers(question.get("answer", ""))
-    matched, retry, method, detail = match_answer_full(accepted, transcript)
-    if matched:
-        detail["score"] = {"exact": 100, "pinyin": 94, "phonetic": 90, "fuzzy": 86}.get(method, 85)
-        return True, method, detail
-    if retry:
-        detail["retry"] = True
-        detail["score"] = 60
-        return False, "near_miss", detail
-    detail["transcriptNormalized"] = normalized
-    detail["acceptedCount"] = len(accepted)
-    if allow_ai:
-        ai_result = judge_answer_ai(
-            settings,
-            question_prompt=question.get("prompt", ""),
-            reference_answer=question.get("answer", ""),
-            transcript=transcript,
-        )
-        if ai_result is not None:
-            detail["aiJudge"] = ai_result
-            detail["score"] = 85 if ai_result else 0
-            return bool(ai_result), "ai", detail
-    detail["score"] = 0
-    return False, "exact", detail

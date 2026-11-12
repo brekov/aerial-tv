@@ -16,34 +16,6 @@ import java.net.URL
 object MimoClient {
     private const val TAG = "AerialStudy"
 
-    fun transcribe(wav: ByteArray): String {
-        val encoded = Base64.encodeToString(wav, Base64.NO_WRAP)
-        val inputAudio = JSONObject()
-            .put("type", "input_audio")
-            .put("input_audio", JSONObject().put("data", "data:audio/wav;base64,$encoded"))
-        val messages = JSONArray().put(
-            JSONObject()
-                .put("role", "user")
-                .put("content", JSONArray().put(inputAudio)),
-        )
-        val body = JSONObject()
-            .put("model", StudySettings.mimoAsrModel)
-            .put("messages", messages)
-            .put("asr_options", JSONObject().put("language", "auto"))
-            .put("stream", false)
-        val json = JSONObject(post(body))
-        val message = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
-            ?: error("MiMo ASR: missing choices[0].message")
-        val content = message.opt("content")
-        val text = when (content) {
-            is JSONArray -> (0 until content.length()).joinToString("") { content.optString(it) }
-            null -> ""
-            JSONObject.NULL -> ""
-            else -> content.toString()
-        }
-        return text.trim()
-    }
-
     fun synthesize(text: String): ByteArray {
         val messages = JSONArray()
             .put(JSONObject().put("role", "user").put("content", "请自然地朗读下面这句话。"))
