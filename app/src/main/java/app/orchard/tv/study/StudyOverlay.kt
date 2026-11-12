@@ -74,6 +74,11 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             instance?.dismissFromOutside()
             instance = null
         }
+
+        /** Test-only: show the scoring UI without waiting for a microphone answer. */
+        fun previewScore() {
+            instance?.showScorePreview()
+        }
     }
 
     private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -112,6 +117,17 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private val pass = Runnable { finish(true) }
     private val nextStep = Runnable {
         if (!closed) showRepeatCard()
+    }
+
+    private fun showScorePreview() {
+        if (closed) return
+        stopSpeech()
+        showCue(Cue.CHECK)
+        status.text = service.getString(R.string.study_score, 86)
+        status.setTextColor(Color.WHITE)
+        status.visibility = View.VISIBLE
+        title.text = service.getString(R.string.study_repeat_learning)
+        progress.progress = 1
     }
 
     internal fun show() {

@@ -56,6 +56,7 @@ import kotlinx.coroutines.launch
  * ordinary apps cannot get, so no other app on the TV can flip these.
  */
 class ConfigReceiver : BroadcastReceiver() {
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.getBooleanExtra("study_mic_probe", false)) {
             StudyMicProbe.start(context)
@@ -80,7 +81,10 @@ class ConfigReceiver : BroadcastReceiver() {
             if (intent.hasExtra("study_interval_min")) StudySettings.intervalMinutes = intent.getIntExtra("study_interval_min", 6)
             StudyWatch.start(context)
             if (!StudySettings.enabled) StudyOverlay.dismiss()
-            val shown = intent.getBooleanExtra("study_test", false) && StudyOverlay.show(context)
+            val shown = (intent.getBooleanExtra("study_test", false) || intent.getBooleanExtra("study_score_test", false)) && StudyOverlay.show(context)
+            if (intent.getBooleanExtra("study_score_test", false)) {
+                mainHandler.postDelayed({ StudyOverlay.previewScore() }, 600)
+            }
             resultData = StudySettings.diagnostic() + if (shown) " overlay=shown" else ""
             return
         }
