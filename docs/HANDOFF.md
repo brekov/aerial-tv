@@ -1,5 +1,18 @@
 # 交接说明
 
+## 现状（2026-11-12，Aerial Study 跟读分支）
+
+- **1.95.1（versionCode 136），2026-11-12 发布**：基于上游 1.95 合入当前 main 的学习分支。这个分支把旧的 5 题看图识字、先听再读、文本 ASR 判题整套删除，改为 **3 张图片跟读学习**：
+  - TV 端进入先播报「跟读学习」，显示图片后播报 `word + 字母拼写`，拼读结束立即录音。
+  - 每张图片只上传 WAV，NAS 直接调用一次 MiMo 2.6 音频评分，返回 `heard/verdict/score/feedback`；不再跑 ASR、文本判题或拼音匹配。
+  - 评分后自动下一张；低分不重启整轮；第 3 张结束。无语音时同一张图片重新播报并录音。
+  - 修复了旧 `pauseAudio()` 直接 mute `STREAM_MUSIC` 导致 TTS 也被静音的问题；现在学习期间临时取消静音、请求音频焦点、发送媒体暂停，结束后恢复原状态。
+  - 修复播放时长 Chip 读取不可观察属性导致选中态不更新的问题，改用 Compose 可观察状态。
+  - 删除 `/api/v1/sessions`、`/api/v1/asr`、ASR 引擎/依赖、文本判题和旧选择题 Overlay；保留管理端题库/素材/分类/记录和 repeat schema。
+  - 管理端按设计稿重做：题库缩略图/预览/编辑、素材二维码/扫描/删除、AI 生成、错题本。
+  - 验证：standard release 构建通过；小米 MFTR0 安装 standard + 31.dm；`/api/v1/repeat-learning/sessions` 返回 3 卡；真实 `ant` 音频单次 MiMo 评分约 2.7 秒；旧 `/api/v1/sessions`、`/api/v1/asr` 返回 404。
+  - 说明：TV 的普通界面未改；学习测试完成后开关保持关闭。**下次 upstream 发版 versionCode 要在 136 之后继续加。**
+
 写给接手 Aerial 的人或 AI。先读这份，再读 [ARCHITECTURE.md](ARCHITECTURE.md) 和 [devices/](devices/)。
 
 ## 现状（2026-11-12）
