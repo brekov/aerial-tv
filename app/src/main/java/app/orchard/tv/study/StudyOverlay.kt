@@ -96,6 +96,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private enum class Cue { READY, LISTEN, SPEAK, PROCESS, CHECK, CROSS }
     private var speech: SpeechRecognizer? = null
     private var session: StudyClient.Session? = null
+    private var repeatSession: StudyClient.RepeatSession? = null
+    private var transition: FrameLayout? = null
     private var index = 0
     private var listening = false
     private var listenGeneration = 0
@@ -109,7 +111,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private val timeout = Runnable { if (!closed) retry("timeout") }
     private val pass = Runnable { finish(true) }
     private val nextStep = Runnable {
-        if (!closed) showQuestion()
+        if (!closed) showRepeatCard()
     }
 
     internal fun show() {
@@ -222,7 +224,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         // One full-width progress line at the very top. The split content starts below it.
         progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
-            max = StudySettings.QUESTIONS
+            max = 3
             progressTintList = ColorStateList.valueOf(Color.rgb(47, 123, 255))
             progressBackgroundTintList = ColorStateList.valueOf(Color.argb(90, 255, 255, 255))
             minimumHeight = (5 * density).toInt().coerceAtLeast(3)
@@ -323,6 +325,20 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.75f))
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
+
+        transition = FrameLayout(service).apply {
+            visibility = View.GONE
+            alpha = 0f
+            setBackground(GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.argb(230, 8, 25, 55), Color.argb(240, 2, 9, 24)),
+            ))
+            addView(text(34f, Color.WHITE, Typeface.BOLD).apply {
+                text = service.getString(R.string.study_repeat_learning)
+                gravity = Gravity.CENTER
+            }, FrameLayout.LayoutParams(-1, -1))
+        }
+        root.addView(transition, FrameLayout.LayoutParams(-1, -1))
 
         // Aerial pages use a translucent dark glass. Accessibility overlays cannot call Compose's
         // liquidGlass, so use a translucent gradient with a lit rim and try native blur behind.
@@ -435,21 +451,146 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         status.text = service.getString(R.string.study_loading)
         status.visibility = View.VISIBLE
         io.execute {
-            val result = runCatching { StudyClient.startSession() }
+            val result = runCatching { StudyClient.startRepeatSession() }
             main.post {
                 if (closed) return@post
                 result.onSuccess { s ->
-                    session = s
+                    repeatSession = s
+                    session = null
                     index = 0
                     attempt = 0
-                    if (s.questions.isEmpty()) {
+                    if (s.cards.isEmpty()) {
                         showCue(Cue.CROSS)
                         announce(R.string.study_voice_error) { retryLater() }
                     } else {
-                        showQuestion()
+                        transitionIntoLearning()
                     }
                 }.onFailure {
-                    Log.w(TAG, "study session failed", it)
+                    Log.w(TAG, "repeat session failed", it)
+                    showCue(Cue.CROSS)
+                    announce(R.string.study_voice_error) { retryLater() }
+                }
+            }
+        }
+    }
+
+    private fun transitionIntoLearning() {
+        hideCue()
+        val layer = transition ?: return showRepeatCard()
+        layer.visibility = View.VISIBLE
+        layer.alpha = 0f
+        layer.scaleX = 0.96f
+        layer.scaleY = 0.96f
+        layer.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420).withEndAction {
+            if (closed) return@withEndAction
+            StudyVoice.speak(service, service.getString(R.string.study_repeat_learning)) {
+                main.post {
+                    if (closed) return@post
+                    layer.animate().alpha(0f).setDuration(260).withEndAction {
+                        layer.visibility = View.GONE
+                        if (!closed) showRepeatCard()
+                    }.start()
+                }
+            }
+        }.start()
+    }
+
+    private fun showRepeatCard() {
+        val s = repeatSession ?: return
+        val card = s.cards.getOrNull(index) ?: return finish(true)
+        stopSpeech()
+        main.removeCallbacks(nextStep)
+        main.removeCallbacks(timeout)
+        main.postDelayed(timeout, 120_000)
+        hideCue()
+        choiceActive = false
+        choiceList.visibility = View.GONE
+        centerBlock.visibility = View.VISIBLE
+        progress.max = s.cards.size
+        progress.progress = index + 1
+        title.text = service.getString(R.string.study_repeat_learning)
+        status.visibility = View.VISIBLE
+        status.setTextColor(Color.WHITE)
+        status.text = service.getString(R.string.study_repeat_progress, index + 1, s.cards.size)
+        image.setImageBitmap(null)
+        image.animate().cancel()
+        image.alpha = 0f
+        image.translationX = 24f * service.resources.displayMetrics.density
+        if (card.imageUrl == null) {
+            speakCard(card)
+        } else io.execute {
+            val bmp = StudyClient.loadImage(card.imageUrl)
+            main.post {
+                if (closed) return@post
+                image.setImageBitmap(bmp)
+                image.post { syncLeftCardHeight() }
+                image.animate().alpha(1f).translationX(0f).setDuration(250).start()
+                speakCard(card)
+            }
+        }
+    }
+
+    private fun speakCard(card: StudyClient.RepeatCard) {
+        if (closed) return
+        status.text = service.getString(R.string.study_repeat_progress, index + 1, (repeatSession?.cards?.size ?: 3))
+        showCue(Cue.LISTEN)
+        StudyVoice.speakSpelling(service, card.word, card.letters) {
+            main.post { if (!closed) listenRepeat() }
+        }
+    }
+
+    private fun listenRepeat() {
+        if (closed) return
+        stopSpeech()
+        showCue(Cue.READY)
+        status.text = service.getString(R.string.study_mic_ready)
+        status.setTextColor(Color.rgb(130, 220, 160))
+        status.visibility = View.VISIBLE
+        startRecognizer(listenGeneration)
+    }
+
+    private fun submitRepeatAudio() {
+        val s = repeatSession ?: return
+        val card = s.cards.getOrNull(index) ?: return
+        val wav = StudyAudioBus.take()
+        if (wav == null) {
+            retry("no speech")
+            return
+        }
+        showCue(Cue.PROCESS)
+        status.text = service.getString(R.string.study_recognizing)
+        status.setTextColor(Color.LTGRAY)
+        main.removeCallbacks(timeout)
+        io.execute {
+            val result = runCatching { StudyClient.submitRepeatAttempt(s.id, card.id, wav) }
+            main.post {
+                if (closed) return@post
+                result.onSuccess { r ->
+                    if (r.retry) {
+                        status.text = r.feedback.ifBlank { service.getString(R.string.study_voice_retry) }
+                        status.visibility = View.VISIBLE
+                        showCue(Cue.READY)
+                        main.postDelayed({ if (!closed) listenRepeat() }, 700)
+                        return@post
+                    }
+                    val shown = if (r.score > 0) service.getString(R.string.study_score, r.score) else r.feedback
+                    status.text = shown
+                    status.setTextColor(Color.WHITE)
+                    status.visibility = View.VISIBLE
+                    showCue(if (r.score >= 60) Cue.CHECK else Cue.CROSS)
+                    if (r.finished) {
+                        index = s.cards.size
+                        main.postDelayed({
+                            if (!closed) {
+                                announce(R.string.study_voice_passed) { main.postDelayed(pass, 500) }
+                            }
+                        }, 900)
+                    } else {
+                        index += 1
+                        scheduleNext()
+                    }
+                }.onFailure {
+                    Log.w(TAG, "repeat answer failed", it)
                     showCue(Cue.CROSS)
                     announce(R.string.study_voice_error) { retryLater() }
                 }
@@ -574,6 +715,10 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             override fun onResults(results: android.os.Bundle?) {
                 if (closed || generation != listenGeneration) return
                 listening = false
+                if (repeatSession != null) {
+                    submitRepeatAudio()
+                    return
+                }
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                 if (text.isBlank()) retry("empty") else submit(text)
             }
@@ -586,6 +731,8 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(AerialRecognitionService.EXTRA_AUDIO_ONLY, true)
         }
         runCatching { recognizer.startListening(intent) }.onFailure {
             Log.w(TAG, "startListening", it)
@@ -730,7 +877,11 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         showCue(if (noSpeech) Cue.READY else Cue.CROSS)
         val voice = if (noSpeech) R.string.study_voice_no_speech else R.string.study_voice_error
         announce(voice) {
-            if (attempt <= 3) main.postDelayed({ if (!closed) listen() }, 500)
+            if (attempt <= 3) main.postDelayed({
+                if (!closed) {
+                    if (repeatSession != null) showRepeatCard() else listen()
+                }
+            }, 500)
             else retryLater()
         }
     }
@@ -785,14 +936,17 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         runCatching {
             oldVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
             oldMute = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audio.isStreamMute(AudioManager.STREAM_MUSIC)
-            // Only send PAUSE if something is actually playing; resuming a video the user had
-            // already paused would be worse than leaving it alone.
             wasPlaying = audio.isMusicActive()
-            if (wasPlaying) dispatchMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE)
+            // TTS uses the media stream. Unmute temporarily so the child can hear the
+            // lesson; restore the original mute state when the overlay closes.
+            if (oldMute && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+            }
             @Suppress("DEPRECATION")
             hasFocus = audio.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT) ==
                 AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+            // Pause even if isMusicActive() is false: a muted player can still be moving.
+            dispatchMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE)
         }
     }
 
@@ -800,23 +954,17 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         val resume = wasPlaying
         wasPlaying = false
         runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (oldMute) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
-                else {
-                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-                    if (oldVolume >= 0) audio.setStreamVolume(AudioManager.STREAM_MUSIC, oldVolume, 0)
-                }
-            }
             if (hasFocus) {
                 @Suppress("DEPRECATION")
                 audio.abandonAudioFocus(null)
+            }
+            if (oldMute && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
             }
             oldVolume = -1
             hasFocus = false
         }
         if (resume) {
-            // Some players resume themselves when focus is released; give them a moment, then
-            // send PLAY only if nothing is playing. The key is routed to the active media session.
             main.postDelayed({
                 if (!audio.isMusicActive()) dispatchMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
             }, 350)

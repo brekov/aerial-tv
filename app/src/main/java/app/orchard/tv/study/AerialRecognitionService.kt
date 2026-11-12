@@ -42,16 +42,19 @@ class AerialRecognitionService : RecognitionService() {
         private const val MAX_FRAMES = 400 // 8 s
         private const val NO_SPEECH_FRAMES = 300 // 6 s
         private const val SOFTWARE_GAIN = 2.0
+        const val EXTRA_AUDIO_ONLY = "app.orchard.tv.study.AUDIO_ONLY"
         private val main = Handler(Looper.getMainLooper())
     }
 
     private var worker: Thread? = null
     private val cancelled = AtomicBoolean(false)
     private var record: AudioRecord? = null
+    private var audioOnly = false
 
     override fun onStartListening(intent: Intent?, listener: Callback) {
         stopWorker()
         cancelled.set(false)
+        audioOnly = intent?.getBooleanExtra(EXTRA_AUDIO_ONLY, false) == true
         StudySettings.init(this)
         listener.readyForSpeech(Bundle())
         worker = Thread({ capture(listener) }, "aerial-recognition").also { it.start() }
@@ -169,6 +172,14 @@ class AerialRecognitionService : RecognitionService() {
             main.post { listener.endOfSpeech() }
             val wav = wav(utterance.toByteArray())
             StudyAudioBus.put(wav)
+            if (audioOnly) {
+                val empty = Bundle().apply {
+                    putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf(""))
+                    putFloatArray(SpeechRecognizer.CONFIDENCE_SCORES, floatArrayOf(1f))
+                }
+                main.post { if (!cancelled.get()) listener.results(empty) }
+                return
+            }
             val text = (if (StudySettings.mimoConfigured) {
                 runCatching { MimoClient.transcribe(wav) }
             } else {

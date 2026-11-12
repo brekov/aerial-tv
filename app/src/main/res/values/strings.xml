@@ -388,4 +388,6 @@
     <string name="study_phone_refresh">Refresh QR code</string>
     <string name="study_phone_expires">Remaining %1$s</string>
     <string name="study_phone_refresh_short">Refresh</string>
+    <string name="study_repeat_learning">Repeat learning</string>
+    <string name="study_repeat_progress">Repeat learning · %1$d/%2$d</string>
 </resources>

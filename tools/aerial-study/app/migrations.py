@@ -93,6 +93,11 @@ def migrate_v2(conn: sqlite3.Connection, now: str) -> None:
     conn.execute("UPDATE materials SET source = 'upload' WHERE source IS NULL OR source = ''")
 
 
+def migrate_v4(conn: sqlite3.Connection) -> None:
+    """Repeat-learning tables are created by schema.sql; keep version migration explicit."""
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_repeat_attempts_session ON repeat_attempts(session_id)")
+
+
 def seed_taxonomy(conn: sqlite3.Connection, now: str) -> None:
     ages: Iterable[tuple[str, str, int]] = (
         ("unclassified", "未分类", 0),

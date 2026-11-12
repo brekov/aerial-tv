@@ -152,6 +152,7 @@ fun WallpaperSheet(
     var showDaily by remember { mutableStateOf(false) }
     var showMimo by remember { mutableStateOf(false) }
     var showDuration by remember { mutableStateOf(false) }
+    var intervalMinutes by remember { androidx.compose.runtime.mutableIntStateOf(StudySettings.intervalMinutes) }
 
     BackHandler(enabled = visible, onBack = onDismiss)
 
@@ -268,14 +269,15 @@ fun WallpaperSheet(
                             SettingRow(R.string.study_duration, stringResource(R.string.study_duration_hint), note) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     presetDurations.forEach { minutes ->
-                                        Chip(stringResource(R.string.study_duration_value, minutes), on = StudySettings.intervalMinutes == minutes) {
+                                        Chip(stringResource(R.string.study_duration_value, minutes), on = intervalMinutes == minutes) {
+                                            intervalMinutes = minutes
                                             StudySettings.intervalMinutes = minutes
                                             StudySettings.resetWatch()
                                         }
                                     }
                                     Chip(
                                         stringResource(R.string.study_duration_custom),
-                                        on = StudySettings.intervalMinutes !in presetDurations,
+                                        on = intervalMinutes !in presetDurations,
                                     ) { showDuration = true }
                                 }
                             }
@@ -510,8 +512,9 @@ fun WallpaperSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 StudyDurationDialog(
-                    initial = StudySettings.intervalMinutes,
+                    initial = intervalMinutes,
                     onSave = { minutes ->
+                        intervalMinutes = minutes
                         StudySettings.intervalMinutes = minutes
                         StudySettings.resetWatch()
                         showDuration = false

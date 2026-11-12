@@ -387,4 +387,6 @@
     <string name="study_phone_refresh">刷新二维码</string>
     <string name="study_phone_expires">剩余 %1$s</string>
     <string name="study_phone_refresh_short">刷新</string>
+    <string name="study_repeat_learning">跟读学习</string>
+    <string name="study_repeat_progress">跟读学习 · %1$d/%2$d</string>
 </resources>

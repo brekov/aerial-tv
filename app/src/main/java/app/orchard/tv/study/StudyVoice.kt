@@ -95,6 +95,50 @@ object StudyVoice {
         }
     }
 
+    /** Speak the word, then spell its letters; used by repeat-learning. */
+    fun speakSpelling(context: Context, word: String, letters: List<String>, onDone: () -> Unit) {
+        val app = context.applicationContext
+        main.post {
+            val gen = ++generation
+            releaseCurrent()
+            val text = word + ", " + letters.joinToString(", ")
+            if (StudySettings.mimoConfigured) {
+                val cached = cachedSpellingFile(app, word, letters)
+                if (cached != null && cached.length() > 0) {
+                    playFile(app, gen, "spell:$text", cached, onDone, deleteOnDone = false)
+                    return@post
+                }
+                Thread({
+                    val audio = runCatching { MimoClient.synthesizeSpelling(word, letters) }
+                        .onFailure { Log.w(TAG, "MiMo spelling TTS failed; using Android TTS", it) }
+                        .getOrNull()
+                    main.post {
+                        if (gen != generation) return@post
+                        if (audio != null && audio.isNotEmpty()) {
+                            val target = cachedSpellingFile(app, word, letters)
+                            if (target != null && runCatching { target.writeBytes(audio) }.isSuccess) {
+                                playFile(app, gen, "spell:$text", target, onDone, deleteOnDone = false)
+                            } else {
+                                playWav(app, gen, "spell:$text", audio, onDone)
+                            }
+                        } else {
+                            androidSpeak(app, gen, text, onDone, Locale.ENGLISH)
+                        }
+                    }
+                }, "study-spelling-tts").apply { isDaemon = true }.start()
+            } else {
+                androidSpeak(app, gen, text, onDone, Locale.ENGLISH)
+            }
+        }
+    }
+
+    private fun cachedSpellingFile(context: Context, word: String, letters: List<String>): File? = runCatching {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("spelling|$word|${letters.joinToString(",")}|${StudySettings.mimoTtsModel}|${StudySettings.mimoVoice}".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        File(context.cacheDir, "study-spelling-$digest.wav")
+    }.getOrNull()
+
     fun stop() {
         main.post {
             generation++

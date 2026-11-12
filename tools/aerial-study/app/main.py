@@ -19,7 +19,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import api_admin, api_public, db, web_admin
+from . import api_admin, api_public, api_repeat, db, web_admin
 from .asr import AsrEngine, AsrError
 from .config import Settings
 from .generation import GenerationError, GenerationService
@@ -27,6 +27,7 @@ from .materials import MaterialError
 from .providers import ProviderError
 from .questions import QuestionError
 from .sessions import SessionError
+from .repeat_learning import RepeatLearningError
 from .taxonomy import TaxonomyError
 
 logger = logging.getLogger("aerial_study")
@@ -36,6 +37,7 @@ _ERROR_TYPES = (
     ProviderError,
     QuestionError,
     SessionError,
+    RepeatLearningError,
     TaxonomyError,
     AsrError,
     GenerationError,
@@ -109,6 +111,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_exception_handler(exc_type, _api_error_handler)
 
     app.include_router(api_public.router)
+    app.include_router(api_repeat.router)
     app.include_router(api_admin.router)
     admin_assets = Path(__file__).parent / "static" / "admin" / "assets"
     if admin_assets.is_dir():

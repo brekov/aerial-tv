@@ -123,3 +123,32 @@ CREATE TABLE IF NOT EXISTS settings (
     value      TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS repeat_sessions (
+    id                TEXT PRIMARY KEY,
+    device_id         TEXT    NOT NULL DEFAULT '',
+    status            TEXT    NOT NULL DEFAULT 'active',
+    card_ids_json     TEXT    NOT NULL,
+    current_index     INTEGER NOT NULL DEFAULT 0,
+    scores_json       TEXT    NOT NULL DEFAULT '[]',
+    total_score       INTEGER NOT NULL DEFAULT 0,
+    created_at        TEXT    NOT NULL,
+    updated_at        TEXT    NOT NULL,
+    finished_at       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS repeat_attempts (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id          TEXT    NOT NULL,
+    card_id             INTEGER NOT NULL,
+    attempt_no          INTEGER NOT NULL,
+    score               INTEGER NOT NULL DEFAULT 0,
+    verdict             TEXT    NOT NULL DEFAULT '',
+    heard               TEXT    NOT NULL DEFAULT '',
+    feedback            TEXT    NOT NULL DEFAULT '',
+    pronunciation_json  TEXT    NOT NULL DEFAULT '{}',
+    provider            TEXT    NOT NULL DEFAULT '',
+    model               TEXT    NOT NULL DEFAULT '',
+    created_at          TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_repeat_attempts_session ON repeat_attempts(session_id);
