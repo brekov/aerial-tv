@@ -549,7 +549,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         val noSpeech = reason == "no speech" || reason == "empty"
         showCue(if (noSpeech) Cue.READY else Cue.CROSS)
         val voice = if (noSpeech) R.string.study_voice_no_speech else R.string.study_voice_error
-        val display = if (noSpeech) activity.getString(R.string.study_voice_no_speech).replace("，", "，\n").replace(", ", ",\n") else null
+        val display = if (noSpeech) activity.getString(R.string.study_voice_no_speech).replace("，", "\n").replace(", ", "\n") else null
         announce(voice, display) {
             if (attempt <= 3) main.postDelayed({
                 if (!closed) {

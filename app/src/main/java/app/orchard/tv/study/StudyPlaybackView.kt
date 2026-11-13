@@ -3,16 +3,14 @@ package app.orchard.tv.study
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.view.View
-import kotlin.math.sin
 
 /**
- * Nine rising rounded bars, laid out on the same width as the recording wave.
- * The first is effectively a dot; the last matches the tallest recording bar.
+ * Playback cue: a speaker followed by bars that appear one by one from left to right.
+ * The bars keep a fixed height; the motion is the travelling appearance, not a vertical sine wave.
  */
 class StudyPlaybackView(context: Context) : View(context) {
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -21,22 +19,32 @@ class StudyPlaybackView(context: Context) : View(context) {
         strokeJoin = Paint.Join.ROUND
         color = StudyStyle.Focus
     }
-    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val speaker = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = StudyStyle.Focus
     }
+    private val speakerLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        color = StudyStyle.Focus
+    }
     private val rect = RectF()
-    private val curve = Path()
+    private val speakerPath = Path()
+    private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 1_900
+        duration = 2_100
         repeatCount = ValueAnimator.INFINITE
-        addUpdateListener { invalidate() }
+        addUpdateListener { phase = it.animatedValue as Float; invalidate() }
     }
 
     fun setActive(active: Boolean) {
-        if (active && !animator.isStarted) animator.start()
-        if (!active) animator.cancel()
-        visibility = if (active) VISIBLE else INVISIBLE
+        if (active) {
+            if (!animator.isStarted) animator.start()
+            visibility = VISIBLE
+        } else {
+            animator.cancel()
+            visibility = INVISIBLE
+        }
         invalidate()
     }
 
@@ -48,38 +56,54 @@ class StudyPlaybackView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (visibility != VISIBLE) return
-        val phase = (animator.animatedValue as? Float) ?: 0f
-        val count = 9
         val width = width.toFloat()
         val height = height.toFloat()
-        // Match StudyWaveView's horizontal span: centers at w/18 .. 17w/18, bar w/23.
-        val firstX = width / 18f
-        val lastX = width * 17f / 18f
-        val step = (lastX - firstX) / (count - 1)
-        val barWidth = width / 23f
-        val maxHeight = height * 0.56f
+        if (width <= 0f || height <= 0f) return
         val centerY = height / 2f
-        for (i in 0 until count) {
-            val x = firstX + i * step
-            val linear = i / (count - 1f)
-            val target = barWidth + (maxHeight - barWidth) * linear
-            // A small travelling pulse, left to right, keeps all nine visible.
-            val local = (phase + i * 0.075f) % 1f
-            val pulse = 0.94f + 0.06f * sin((local * Math.PI * 2).toFloat())
-            val h = target * pulse
-            val alpha = (205 + 50 * sin((local * Math.PI * 2 + 0.7).toFloat())).toInt().coerceIn(150, 255)
-            bar.alpha = alpha
-            bar.strokeWidth = barWidth
-            if (i == 0) {
-                dot.alpha = alpha
-                canvas.drawCircle(x, centerY, barWidth / 2f, dot)
-            } else {
-                val bend = barWidth * 0.38f
-                curve.reset()
-                curve.moveTo(x, centerY + h / 2f)
-                curve.quadTo(x + bend, centerY, x, centerY - h / 2f)
-                canvas.drawPath(curve, bar)
-            }
+        val glyphSize = height * 0.46f
+        val left = width * 0.06f
+        drawSpeaker(canvas, left, centerY, glyphSize)
+
+        val barCount = 7
+        val startX = left + glyphSize * 1.15f
+        val endX = width * 0.94f
+        val step = (endX - startX) / barCount
+        val barWidth = (bar.strokeWidth.takeIf { it > 0f } ?: (width / 34f)).coerceAtLeast(width / 42f)
+        bar.strokeWidth = barWidth
+        val maxHeight = height * 0.58f
+        for (i in 0 until barCount) {
+            val local = ((phase - i * 0.075f) / 0.48f).coerceIn(0f, 1f)
+            if (local <= 0f) continue
+            bar.alpha = (local * 255f).toInt().coerceIn(0, 255)
+            val x = startX + step * (i + 0.5f)
+            val target = height * (0.20f + 0.36f * (i.toFloat() / (barCount - 1)))
+            rect.set(x - barWidth / 2f, centerY - target / 2f, x + barWidth / 2f, centerY + target / 2f)
+            canvas.drawRoundRect(rect, barWidth / 2f, barWidth / 2f, bar)
+        }
+    }
+
+    private fun drawSpeaker(canvas: Canvas, x: Float, cy: Float, size: Float) {
+        val bodyW = size * 0.20f
+        val bodyH = size * 0.30f
+        val coneW = size * 0.38f
+        val coneH = size * 0.68f
+        val bodyLeft = x
+        rect.set(bodyLeft, cy - bodyH / 2f, bodyLeft + bodyW, cy + bodyH / 2f)
+        canvas.drawRoundRect(rect, bodyW * 0.22f, bodyW * 0.22f, speaker)
+        speakerPath.reset()
+        speakerPath.moveTo(bodyLeft + bodyW, cy - coneH * 0.30f)
+        speakerPath.lineTo(bodyLeft + bodyW + coneW, cy - coneH / 2f)
+        speakerPath.lineTo(bodyLeft + bodyW + coneW, cy + coneH / 2f)
+        speakerPath.lineTo(bodyLeft + bodyW, cy + coneH * 0.30f)
+        speakerPath.close()
+        canvas.drawPath(speakerPath, speaker)
+        speakerLine.strokeWidth = (size * 0.055f).coerceAtLeast(1f)
+        val arcLeft = bodyLeft + bodyW + coneW * 0.18f
+        val arcSize = size * 0.43f
+        for (i in 0 until 2) {
+            val inset = i * size * 0.12f
+            rect.set(arcLeft - inset, cy - arcSize / 2f - inset, arcLeft + arcSize - inset, cy + arcSize / 2f + inset)
+            canvas.drawArc(rect, -50f, 100f, false, speakerLine)
         }
     }
 }
