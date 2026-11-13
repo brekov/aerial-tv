@@ -1,6 +1,6 @@
 package app.orchard.tv.study
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -11,13 +11,14 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import app.orchard.tv.guard.HomeGuardService
+import app.orchard.tv.wallpaper.Wallpapers
 import app.orchard.tv.system.DiagLog
 
 /**
  * Full-screen repeat-learning Activity. It owns its task, so the video app below it is paused by
  * the normal Activity lifecycle and resumes when this task is removed.
  */
-class StudyActivity : Activity() {
+class StudyActivity : ComponentActivity() {
     companion object {
         private const val TAG = "AerialStudy"
         const val EXTRA_ACTIVE = "app.orchard.tv.study.ACTIVE"
@@ -66,6 +67,8 @@ class StudyActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         StudySettings.init(this)
+        // The LiquidGlass panel samples the same frosted wallpaper as Home.
+        runCatching { Wallpapers.init(applicationContext) }
         if (!StudySettings.enabled) {
             finish()
             return

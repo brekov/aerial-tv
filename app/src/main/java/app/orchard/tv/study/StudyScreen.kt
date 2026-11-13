@@ -107,24 +107,10 @@ class StudyScreen internal constructor(private val activity: Activity) {
         val density = activity.resources.displayMetrics.density
         val screenWidth = activity.resources.displayMetrics.widthPixels
 
-        // Android TV here reports mBlurEnabled=false, so FLAG_BLUR_BEHIND alone leaves the app
-        // behind sharp. Use the same pre-frosted wallpaper the Home liquidGlass shader uses;
-        // this is Aerial's own wallpaper asset, not a screenshot of the underlying app.
-        val frostFile = File(activity.filesDir, "backdrop/frost.png")
-        val frost = runCatching { BitmapFactory.decodeFile(frostFile.path) }.getOrNull()
-        if (frost != null) {
-            root.addView(ImageView(activity).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageBitmap(frost)
-            }, FrameLayout.LayoutParams(-1, -1))
-            root.addView(View(activity).apply {
-                setBackgroundColor(Color.argb(80, 2, 8, 20))
-            }, FrameLayout.LayoutParams(-1, -1))
-        } else {
-            root.addView(View(activity).apply {
-                setBackgroundColor(StudyStyle.Scrim)
-            }, FrameLayout.LayoutParams(-1, -1))
-        }
+        // Let Aerial's own LiquidGlass shader paint the left panel. It uses the same
+        // Wallpapers.frosted source as the Home panels, not a screenshot.
+        root.addView(View(activity).apply { setBackgroundColor(Color.argb(16, 2, 8, 20)) }, FrameLayout.LayoutParams(-1, -1))
+        root.addView(studyGlassView(activity), FrameLayout.LayoutParams(-1, -1))
 
         val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
 
@@ -148,7 +134,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         leftCard = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt())
-            background = StudyStyle.panel(activity, 30f)
+            background = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
         }
         title = text(15f, StudyStyle.Label, Typeface.BOLD).apply {
             text = activity.getString(R.string.study_title)

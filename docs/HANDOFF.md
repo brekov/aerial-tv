@@ -8,7 +8,7 @@
   - `StudyStateReceiver` 用显式广播同步 active，`StudyDismissReceiver` 关闭 Activity
   - 全屏不透明 Activity 让下层视频进入 pause；退出 `finishAndRemoveTask()` 回到原视频
   - 从 `HomeGuardService` 的无障碍 context 启动，避免后台 Activity 限制
-  - 背景先尝试 Android `FLAG_BLUR_BEHIND`；这台小米电视系统报告 `mBlurEnabled=false`，因此背景改用主应用 `files/backdrop/frost.png` 的同一张毛玻璃壁纸，不是截图。Activity 使用主应用 Palette/Inter 的深色玻璃板、白色进度和状态色；波形/播放动画也改为 Focus 白。
+  - 背景/左侧面板直接使用主应用 `ui/components/LiquidGlass.kt` 的 `liquidGlass` 组件，通过 `ComposeView` 接入 Activity；采样源是 `Wallpapers.frosted`，不是截图。这个固件 `mBlurEnabled=false`，所以系统模糊不可用。Activity 使用主应用 Palette/Inter 的颜色和字级；波形/播放动画也改为 Focus 白。
   - `StudySession.active` 替代 `StudyOverlay.active`，HomeGuard 继续拦截 Home/Back/语音键
   - 删除 `StudyOverlay.kt` 和 WindowManager overlay
   - 音频焦点、媒体暂停、TTS 取消静音逻辑保留
