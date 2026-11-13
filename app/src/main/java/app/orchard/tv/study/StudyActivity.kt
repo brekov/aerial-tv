@@ -3,6 +3,9 @@ package app.orchard.tv.study
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.os.Build
+import android.view.WindowManager.LayoutParams
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -75,6 +78,13 @@ class StudyActivity : Activity() {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         )
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val attrs = window.attributes
+            attrs.flags = attrs.flags or LayoutParams.FLAG_BLUR_BEHIND
+            attrs.blurBehindRadius = (28 * resources.displayMetrics.density).toInt()
+            window.attributes = attrs
+        }
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -82,7 +92,6 @@ class StudyActivity : Activity() {
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        window.setBackgroundDrawableResource(android.R.color.black)
         screen = StudyScreen(this).also { it.start() }
         DiagLog.i("study: Activity shown")
     }

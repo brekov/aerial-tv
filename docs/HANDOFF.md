@@ -8,7 +8,7 @@
   - `StudyStateReceiver` 用显式广播同步 active，`StudyDismissReceiver` 关闭 Activity
   - 全屏不透明 Activity 让下层视频进入 pause；退出 `finishAndRemoveTask()` 回到原视频
   - 从 `HomeGuardService` 的无障碍 context 启动，避免后台 Activity 限制
-  - 背景使用 `files/backdrop/frost.png` 的毛玻璃壁纸，`:study` 进程没有 `Wallpapers` 内存态时也能显示
+  - 背景改为 Android Window `FLAG_BLUR_BEHIND` + `blurBehindRadius`，直接对下层画面做系统毛玻璃，不使用截图或预烘焙壁纸
   - `StudySession.active` 替代 `StudyOverlay.active`，HomeGuard 继续拦截 Home/Back/语音键
   - 删除 `StudyOverlay.kt` 和 WindowManager overlay
   - 音频焦点、媒体暂停、TTS 取消静音逻辑保留
