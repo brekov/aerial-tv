@@ -277,7 +277,7 @@ fun WallpaperSheet(
                                     if (on) {
                                         StudyWatch.start(context)
                                     } else {
-                                        StudyActivity.dismiss()
+                                        StudyActivity.requestDismiss(context)
                                     }
                                 }
                             }

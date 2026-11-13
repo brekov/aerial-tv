@@ -67,7 +67,7 @@ object StudyWatch {
             lastWatchingAt = now
             StudySettings.addWatch(since)
         }
-        if (StudySettings.watchMs >= StudySettings.intervalMs && !StudySession.active) {
+        if (StudySettings.watchMs >= StudySettings.intervalMs && !StudyPresence.active) {
             DiagLog.i("study: ${StudySettings.intervalMinutes} min watched; opening repeat learning")
             if (!StudyActivity.launch(ctx)) Log.w(TAG, "could not launch the repeat-learning Activity")
         }
@@ -79,7 +79,7 @@ object StudyWatch {
         if (!ctx.getSystemService<PowerManager>()?.isInteractive.orFalse()) return false
         if (Restricted.active) return false
         if (AerialDream.showing) return false
-        if (StudySession.active) return false
+        if (StudyPresence.active) return false
         val front = frontByUsage(ctx) ?: return false
         if (front == ctx.packageName) return false
         if (front.startsWith("com.xiaomi.mitv.settings") || front.startsWith("com.android.tv.settings")) return false

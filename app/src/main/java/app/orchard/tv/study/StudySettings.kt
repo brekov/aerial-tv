@@ -39,7 +39,7 @@ object StudySettings {
         app = context.applicationContext
     }
 
-    private fun prefs() = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE or Context.MODE_MULTI_PROCESS)
 
     var enabled: Boolean
         get() = prefs().getBoolean(KEY_ENABLED, false)

@@ -35,7 +35,7 @@ import androidx.core.content.getSystemService
 import app.orchard.tv.MainActivity
 import app.orchard.tv.dream.AerialDream
 import app.orchard.tv.settings.AerialSettings
-import app.orchard.tv.study.StudySession
+import app.orchard.tv.study.StudyPresence
 import app.orchard.tv.study.StudyWatch
 import app.orchard.tv.system.BootOpen
 import app.orchard.tv.system.CecSwitch
@@ -1299,7 +1299,7 @@ class HomeGuardService : AccessibilityService() {
         // stopped, and the lift went to the system as a Home press of its own. Its "homekey" then
         // ended the visit and Aerial came back 0.4 s after the task manager opened.
         val homeStillDown = SystemClock.uptimeMillis() - homeDownTakenAt < HOME_DOWN_KEEP_MS
-        val studyWanted = StudySession.active
+        val studyWanted = StudyPresence.active
         val wanted = !keysPassThrough && !screenOff && !padGame && !mouseHang &&
             (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R || aerialInFront || always || homeStillDown || studyWanted)
         // A profile asking for the filter has it with Aerial the default Home too. Coocaa firmware
@@ -1436,7 +1436,7 @@ class HomeGuardService : AccessibilityService() {
         keySeen = true
         // The study quiz owns every key but power: no Home, Back, voice/assistant key or app switch
         // may leave it. Voice assistant windows are also dismissed in onAccessibilityEvent.
-        if (StudySession.active) {
+        if (StudyPresence.active) {
             return event.keyCode != KeyEvent.KEYCODE_POWER
         }
         if (!GuardSetup.isUserUnlocked(this)) return false
@@ -1785,7 +1785,7 @@ class HomeGuardService : AccessibilityService() {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val cls = event.className?.toString() ?: return
-        if (StudySession.active) {
+        if (StudyPresence.active) {
             // Xiao Ai is a privileged system app with its own voice window. Its raw audio/ASR cannot
             // be intercepted; close its window and keep the quiz on top instead of silently
             // letting a voice command leave the quiz.

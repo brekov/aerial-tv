@@ -17,6 +17,7 @@ import app.orchard.tv.system.DiagLog
 class StudyActivity : Activity() {
     companion object {
         private const val TAG = "AerialStudy"
+        const val EXTRA_ACTIVE = "app.orchard.tv.study.ACTIVE"
         private var current: StudyActivity? = null
 
         /**
@@ -42,10 +43,14 @@ class StudyActivity : Activity() {
             }
         }
 
-        fun dismiss() {
+        /** Main-process callers cannot touch [current] in :study; ask that process to close. */
+        fun requestDismiss(context: Context) {
+            context.sendBroadcast(Intent(context, StudyDismissReceiver::class.java))
+        }
+
+        internal fun finishCurrent() {
             current?.let { activity ->
                 activity.runOnUiThread {
-                    current = null
                     StudySession.active = false
                     activity.finishAndRemoveTask()
                 }
@@ -57,12 +62,14 @@ class StudyActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StudySettings.init(this)
         if (!StudySettings.enabled) {
             finish()
             return
         }
         current = this
         StudySession.active = true
+        sendState(true)
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
                 WindowManager.LayoutParams.FLAG_FULLSCREEN or
@@ -93,11 +100,20 @@ class StudyActivity : Activity() {
 
     override fun onDestroy() {
         StudySession.active = false
+        sendState(false)
         if (current === this) current = null
         screen?.shutdown()
         screen = null
         super.onDestroy()
         DiagLog.i("study: Activity closed")
+    }
+
+    private fun sendState(active: Boolean) {
+        sendBroadcast(
+            Intent(this, StudyStateReceiver::class.java)
+                .setPackage(packageName)
+                .putExtra(EXTRA_ACTIVE, active)
+        )
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

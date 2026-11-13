@@ -79,7 +79,7 @@ class ConfigReceiver : BroadcastReceiver() {
             intent.getStringExtra("mimo_voice")?.let { StudySettings.mimoVoice = it }
             if (intent.hasExtra("study_interval_min")) StudySettings.intervalMinutes = intent.getIntExtra("study_interval_min", 6)
             StudyWatch.start(context)
-            if (!StudySettings.enabled) StudyActivity.dismiss()
+            if (!StudySettings.enabled) StudyActivity.requestDismiss(context)
             val shown = intent.getBooleanExtra("study_test", false) && StudyActivity.launch(context)
             resultData = StudySettings.diagnostic() + if (shown) " overlay=shown" else ""
             return

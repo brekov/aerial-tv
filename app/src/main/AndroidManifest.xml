@@ -95,6 +95,7 @@
              one and showed as a card first in the list that switched to nothing (MiTV-MFTR0, #324). -->
         <activity
             android:name=".study.StudyActivity"
+            android:process=":study"
             android:exported="false"
             android:launchMode="singleTask"
             android:taskAffinity="app.orchard.tv.study"
@@ -132,6 +133,7 @@
              Aerial binds it explicitly for Study Guard. -->
         <service
             android:name=".study.AerialRecognitionService"
+            android:process=":study"
             android:exported="true"
             android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
             <intent-filter>
@@ -169,6 +171,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
+
+        <receiver
+            android:name=".study.StudyStateReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".study.StudyDismissReceiver"
+            android:process=":study"
+            android:exported="false" />
 
         <receiver
             android:name=".update.UpdateResult"
