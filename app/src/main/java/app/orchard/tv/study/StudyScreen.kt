@@ -6,6 +6,7 @@ import android.content.res.ColorStateList
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.PixelFormat
@@ -33,6 +34,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import app.orchard.tv.R
 import app.orchard.tv.system.DiagLog
+import java.io.File
 import java.util.concurrent.Executors
 
 /** Full-screen repeat-learning Activity UI; no accessibility overlay window. */
@@ -105,11 +107,24 @@ class StudyScreen internal constructor(private val activity: Activity) {
         val density = activity.resources.displayMetrics.density
         val screenWidth = activity.resources.displayMetrics.widthPixels
 
-        // The window itself is translucent and blurred behind on Android 12+; this only adds a
-        // dark scrim so the white cards stay readable over the blurred foreground app.
-        root.addView(View(activity).apply {
-            setBackgroundColor(StudyStyle.Scrim)
-        }, FrameLayout.LayoutParams(-1, -1))
+        // Android TV here reports mBlurEnabled=false, so FLAG_BLUR_BEHIND alone leaves the app
+        // behind sharp. Use the same pre-frosted wallpaper the Home liquidGlass shader uses;
+        // this is Aerial's own wallpaper asset, not a screenshot of the underlying app.
+        val frostFile = File(activity.filesDir, "backdrop/frost.png")
+        val frost = runCatching { BitmapFactory.decodeFile(frostFile.path) }.getOrNull()
+        if (frost != null) {
+            root.addView(ImageView(activity).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageBitmap(frost)
+            }, FrameLayout.LayoutParams(-1, -1))
+            root.addView(View(activity).apply {
+                setBackgroundColor(Color.argb(80, 2, 8, 20))
+            }, FrameLayout.LayoutParams(-1, -1))
+        } else {
+            root.addView(View(activity).apply {
+                setBackgroundColor(StudyStyle.Scrim)
+            }, FrameLayout.LayoutParams(-1, -1))
+        }
 
         val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
 

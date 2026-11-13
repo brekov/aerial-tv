@@ -12,15 +12,15 @@ internal object StudyStyle {
     val Label = Color.WHITE
     val Secondary = Color.argb(0x99, 0xEB, 0xEB, 0xF5)
     val Tertiary = Color.argb(0x4D, 0xEB, 0xEB, 0xF5)
-    val Glass = Color.argb(0xE6, 0x20, 0x20, 0x22)
-    val GlassSoft = Color.argb(0xD0, 0x24, 0x24, 0x27)
+    val Glass = Color.argb(0x74, 0x2A, 0x2A, 0x30)
+    val GlassSoft = Color.argb(0x8A, 0x2A, 0x2A, 0x30)
     val Fill = Color.argb(0x2E, 0x78, 0x78, 0x80)
     val Hairline = Color.argb(0x1A, 0xFF, 0xFF, 0xFF)
     val Green = Color.rgb(0x30, 0xD1, 0x58)
     val Orange = Color.rgb(0xFF, 0x9F, 0x0A)
     val Red = Color.rgb(0xFF, 0x45, 0x3A)
     val Focus = Color.rgb(0xF5, 0xF5, 0xF7)
-    val Scrim = Color.argb(48, 2, 8, 20)
+    val Scrim = Color.argb(24, 2, 8, 20)
 
     fun typeface(context: Context, bold: Boolean = false): Typeface {
         if (android.os.Build.VERSION.SDK_INT < 26) {
@@ -37,7 +37,7 @@ internal object StudyStyle {
     fun panel(context: Context, cornerDp: Float, soft: Boolean = false): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(if (soft) GlassSoft else Glass, Color.argb(0xE0, 0x16, 0x16, 0x18)),
+            intArrayOf(Color.argb(0x70, 0x36, 0x36, 0x3C), Color.argb(0x9A, 0x12, 0x12, 0x18)),
         ).apply {
             cornerRadius = cornerDp * context.resources.displayMetrics.density
             setStroke(
