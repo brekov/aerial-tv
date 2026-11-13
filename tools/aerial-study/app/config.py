@@ -87,17 +87,6 @@ class Settings:
 
     image_max_mb: int = 10
 
-    asr_model: str = "small"
-    asr_device: str = "cpu"
-    asr_compute_type: str = "int8"
-    asr_language: str = "auto"
-    asr_beam_size: int = 1
-    asr_max_mb: int = 20
-    asr_queue_size: int = 8
-    asr_timeout_seconds: int = 120
-    asr_pcm_sample_rate: int = 16000
-    asr_pcm_channels: int = 1
-    asr_pcm_sample_width: int = 2
 
     deepseek_api_key: str = field(default="", repr=False)
     deepseek_base_url: str = "https://api.deepseek.com/v1"
@@ -141,17 +130,6 @@ class Settings:
             session_ttl_hours=_env_int("SESSION_TTL_HOURS", 24),
             questions_per_session=max(1, _env_int("QUESTIONS_PER_SESSION", 5)),
             image_max_mb=max(1, _env_int("IMAGE_MAX_MB", 10)),
-            asr_model=_env("ASR_MODEL", "small") or "small",
-            asr_device=_env("ASR_DEVICE", "cpu") or "cpu",
-            asr_compute_type=_env("ASR_COMPUTE_TYPE", "int8") or "int8",
-            asr_language=_env("ASR_LANGUAGE", "auto") or "auto",
-            asr_beam_size=max(1, _env_int("ASR_BEAM_SIZE", 1)),
-            asr_max_mb=max(1, _env_int("ASR_MAX_MB", 20)),
-            asr_queue_size=max(1, _env_int("ASR_QUEUE_SIZE", 8)),
-            asr_timeout_seconds=max(5, _env_int("ASR_TIMEOUT_SECONDS", 120)),
-            asr_pcm_sample_rate=_env_int("ASR_PCM_SAMPLE_RATE", 16000),
-            asr_pcm_channels=_env_int("ASR_PCM_CHANNELS", 1),
-            asr_pcm_sample_width=_env_int("ASR_PCM_SAMPLE_WIDTH", 2),
             deepseek_api_key=_env("DEEPSEEK_API_KEY"),
             deepseek_base_url=_env("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
             deepseek_model=_env("DEEPSEEK_MODEL", "deepseek-chat"),

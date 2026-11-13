@@ -20,7 +20,6 @@ import app.orchard.tv.system.DiagLog
  */
 class StudyActivity : ComponentActivity() {
     companion object {
-        private const val TAG = "AerialStudy"
         const val EXTRA_ACTIVE = "app.orchard.tv.study.ACTIVE"
         private var current: StudyActivity? = null
 

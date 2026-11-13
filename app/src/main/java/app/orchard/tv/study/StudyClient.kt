@@ -14,8 +14,6 @@ object StudyClient {
         val id: Long,
         val imageUrl: String?,
         val word: String,
-        val letters: List<String>,
-        val spellingText: String,
     )
     data class RepeatSession(
         val id: String,
@@ -68,8 +66,6 @@ object StudyClient {
                 if (it.startsWith("http")) it else base() + it
             },
             obj.optString("word"),
-            obj.optJSONArray("letters")?.let { arr -> (0 until arr.length()).map { arr.optString(it) } } ?: emptyList(),
-            obj.optString("spellingText"),
         )
         return RepeatSession(
             session.optString("id"),
@@ -95,8 +91,6 @@ object StudyClient {
                     if (it.startsWith("http")) it else base() + it
                 },
                 obj.optString("word"),
-                obj.optJSONArray("letters")?.let { arr -> (0 until arr.length()).map { arr.optString(it) } } ?: emptyList(),
-                obj.optString("spellingText"),
             )
         }
         return RepeatResult(

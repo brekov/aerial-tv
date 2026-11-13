@@ -67,7 +67,6 @@ class StudyScreen internal constructor(private val activity: Activity) {
     private var listenGeneration = 0
     private var closed = false
     private var attempt = 0
-    private var oldVolume = -1
     private var oldMute = false
     private var wasPlaying = false
     private var hasFocus = false
@@ -615,7 +614,6 @@ class StudyScreen internal constructor(private val activity: Activity) {
 
     private fun pauseAudio() {
         runCatching {
-            oldVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
             oldMute = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audio.isStreamMute(AudioManager.STREAM_MUSIC)
             wasPlaying = audio.isMusicActive()
             // TTS uses the media stream. Unmute temporarily so the child can hear the
@@ -642,7 +640,6 @@ class StudyScreen internal constructor(private val activity: Activity) {
             if (oldMute && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
             }
-            oldVolume = -1
             hasFocus = false
         }
         if (resume) {

@@ -1,5 +1,15 @@
 # 交接说明
 
+## 2026-11-13：Aerial 1.95.2 清理与跟读 UI
+
+- **1.95.2（versionCode 137）**：在 1.95.1 基础上清理迭代代码。
+  - 删除旧拼读 TTS（`speakSpelling` / `synthesizeSpelling`），跟读只读目标单词。
+  - 删除旧 `admin.html` / `admin.js` 与 ASR 配置字段、compose 环境项；ASR 引擎早已移除。
+  - 删除 Study 未使用字段（旧音量记录、未用色板等）。
+  - Activity 使用整页 LiquidGlass；过渡页隐藏加载页；播放提示为喇叭 + 弧线依次出现。
+  - 手机上传支持多选、逐张上传、失败重试。
+- 发版包：standard/guard 使用 1.95.2；Lite 保持 1.28（versionCode 30）。
+
 ## 2026-11-13：跟读 Activity 与手机批量上传
 
 - 跟读答题从 Accessibility Overlay 改为 `StudyActivity`：
