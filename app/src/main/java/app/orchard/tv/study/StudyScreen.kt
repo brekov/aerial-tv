@@ -137,7 +137,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
             setPadding((22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt())
             background = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
         }
-        title = text(15f, StudyStyle.Label, Typeface.BOLD).apply {
+        title = text(26f, StudyStyle.Label, Typeface.BOLD).apply {
             text = activity.getString(R.string.study_title)
             typeface = StudyStyle.typeface(activity, bold = true)
             maxLines = 1
@@ -147,7 +147,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         }
         status = text(19f, StudyStyle.Green, Typeface.BOLD).apply {
             typeface = StudyStyle.typeface(activity, bold = true)
-            maxWidth = (screenWidth * 0.24f).toInt()
+            maxWidth = (screenWidth * 0.255f).toInt()
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER_HORIZONTAL
@@ -549,7 +549,8 @@ class StudyScreen internal constructor(private val activity: Activity) {
         val noSpeech = reason == "no speech" || reason == "empty"
         showCue(if (noSpeech) Cue.READY else Cue.CROSS)
         val voice = if (noSpeech) R.string.study_voice_no_speech else R.string.study_voice_error
-        announce(voice) {
+        val display = if (noSpeech) activity.getString(R.string.study_voice_no_speech).replace("，", "，\n").replace(", ", ",\n") else null
+        announce(voice, display) {
             if (attempt <= 3) main.postDelayed({
                 if (!closed) {
                     showRepeatCard()
