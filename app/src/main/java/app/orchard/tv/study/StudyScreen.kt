@@ -398,7 +398,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         if (closed) return
         status.text = activity.getString(R.string.study_repeat_progress, index + 1, (repeatSession?.cards?.size ?: 3))
         showCue(Cue.LISTEN)
-        StudyVoice.speakSpelling(activity, card.word, card.letters) {
+        StudyVoice.speakWord(activity, card.word) {
             main.post { if (!closed) listenRepeat() }
         }
     }

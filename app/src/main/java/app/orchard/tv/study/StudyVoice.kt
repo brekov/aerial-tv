@@ -59,6 +59,43 @@ object StudyVoice {
         }
     }
 
+    /** Speak only the target word; repeat-learning no longer reads the spelling. */
+    fun speakWord(context: Context, word: String, onDone: () -> Unit) {
+        val app = context.applicationContext
+        main.post {
+            val gen = ++generation
+            releaseCurrent()
+            val key = "word:$word"
+            if (StudySettings.mimoConfigured) {
+                val cached = cachedFile(app, key)
+                if (cached != null && cached.length() > 0) {
+                    playFile(app, gen, key, cached, onDone, deleteOnDone = false)
+                    return@post
+                }
+                Thread({
+                    val audio = runCatching { MimoClient.synthesizeWord(word) }
+                        .onFailure { Log.w(TAG, "MiMo word TTS failed; using Android TTS", it) }
+                        .getOrNull()
+                    main.post {
+                        if (gen != generation) return@post
+                        if (audio != null && audio.isNotEmpty()) {
+                            val target = cachedFile(app, key)
+                            if (target != null && runCatching { target.writeBytes(audio) }.isSuccess) {
+                                playFile(app, gen, key, target, onDone, deleteOnDone = false)
+                            } else {
+                                playWav(app, gen, key, audio, onDone)
+                            }
+                        } else {
+                            androidSpeak(app, gen, word, onDone, Locale.ENGLISH)
+                        }
+                    }
+                }, "study-word-only-tts").apply { isDaemon = true }.start()
+            } else {
+                androidSpeak(app, gen, word, onDone, Locale.ENGLISH)
+            }
+        }
+    }
+
     /** Speak the word, then spell its letters; used by repeat-learning. */
     fun speakSpelling(context: Context, word: String, letters: List<String>, onDone: () -> Unit) {
         val app = context.applicationContext
