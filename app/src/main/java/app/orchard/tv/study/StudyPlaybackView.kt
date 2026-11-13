@@ -68,7 +68,7 @@ class StudyPlaybackView(context: Context) : View(context) {
         val startX = left + glyphSize * 1.15f
         val endX = width * 0.94f
         val step = (endX - startX) / barCount
-        val barWidth = width / 23f
+        val barWidth = (width / 34f).coerceAtLeast(width / 42f)
         bar.strokeWidth = barWidth
         val maxHeight = height * 0.58f
         for (i in 0 until barCount) {
