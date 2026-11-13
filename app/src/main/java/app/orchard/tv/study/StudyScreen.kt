@@ -54,6 +54,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
     private lateinit var cue: ImageView
     private lateinit var leftCard: LinearLayout
     private lateinit var centerBlock: LinearLayout
+    private lateinit var pageColumn: LinearLayout
     private lateinit var wave: StudyWaveView
     private lateinit var playback: StudyPlaybackView
     private var cueAnimator: ValueAnimator? = null
@@ -112,7 +113,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         root.addView(View(activity).apply { setBackgroundColor(Color.argb(16, 2, 8, 20)) }, FrameLayout.LayoutParams(-1, -1))
         root.addView(studyGlassView(activity), FrameLayout.LayoutParams(-1, -1))
 
-        val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        pageColumn = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
 
         // One full-width progress line at the very top. The split content starts below it.
         progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -122,7 +123,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
             progressBackgroundTintList = ColorStateList.valueOf(StudyStyle.Hairline)
             minimumHeight = (5 * density).toInt().coerceAtLeast(3)
         }
-        column.addView(progress, LinearLayout.LayoutParams(-1, (5 * density).toInt().coerceAtLeast(3)))
+        pageColumn.addView(progress, LinearLayout.LayoutParams(-1, (5 * density).toInt().coerceAtLeast(3)))
 
         val content = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -199,8 +200,8 @@ class StudyScreen internal constructor(private val activity: Activity) {
 
         content.addView(leftCard, LinearLayout.LayoutParams(0, -1, 0.25f).apply { rightMargin = (4 * density).toInt() })
         content.addView(imageStage, LinearLayout.LayoutParams(0, -1, 0.75f))
-        column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(column, FrameLayout.LayoutParams(-1, -1))
+        pageColumn.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(pageColumn, FrameLayout.LayoutParams(-1, -1))
 
         transition = FrameLayout(activity).apply {
             visibility = View.GONE
@@ -339,6 +340,8 @@ class StudyScreen internal constructor(private val activity: Activity) {
     private fun transitionIntoLearning() {
         hideCue()
         val layer = transition ?: return showRepeatCard()
+        // Only the transition title should be visible; hide the loading state and page behind it.
+        pageColumn.visibility = View.GONE
         layer.visibility = View.VISIBLE
         layer.alpha = 0f
         layer.scaleX = 0.96f
@@ -350,6 +353,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
                     if (closed) return@post
                     layer.animate().alpha(0f).setDuration(260).withEndAction {
                         layer.visibility = View.GONE
+                        pageColumn.visibility = View.VISIBLE
                         if (!closed) showRepeatCard()
                     }.start()
                 }
