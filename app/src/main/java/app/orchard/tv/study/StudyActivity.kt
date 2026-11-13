@@ -80,9 +80,21 @@ class StudyActivity : Activity() {
         DiagLog.i("study: Activity shown")
     }
 
+    override fun onStop() {
+        super.onStop()
+        // If the Activity is covered or the user leaves the task, never leave a background timer
+        // retrying session creation.
+        if (!isFinishing) {
+            StudySession.active = false
+            screen?.shutdown()
+            finishAndRemoveTask()
+        }
+    }
+
     override fun onDestroy() {
         StudySession.active = false
         if (current === this) current = null
+        screen?.shutdown()
         screen = null
         super.onDestroy()
         DiagLog.i("study: Activity closed")

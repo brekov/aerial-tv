@@ -575,6 +575,20 @@ class StudyScreen internal constructor(private val activity: Activity) {
         DiagLog.i(if (passed) "study: passed" else "study: closed")
     }
 
+    /** Stop all retries and audio when the hosting Activity goes away. */
+    fun shutdown() {
+        if (closed) return
+        closed = true
+        main.removeCallbacks(timeout)
+        main.removeCallbacks(pass)
+        main.removeCallbacks(nextStep)
+        stopSpeech()
+        hideCue()
+        StudyVoice.stop()
+        restoreAudio()
+        io.shutdownNow()
+    }
+
     private fun stopSpeech() {
         listenGeneration++
         val r = speech ?: return
