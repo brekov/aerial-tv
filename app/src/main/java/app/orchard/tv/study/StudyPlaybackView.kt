@@ -14,7 +14,9 @@ import android.view.View
  */
 class StudyPlaybackView(context: Context) : View(context) {
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
         color = StudyStyle.Focus
     }
     private val speaker = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -28,6 +30,7 @@ class StudyPlaybackView(context: Context) : View(context) {
     }
     private val rect = RectF()
     private val speakerPath = Path()
+    private val barPath = Path()
     private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 3_300
@@ -63,19 +66,23 @@ class StudyPlaybackView(context: Context) : View(context) {
         drawSpeaker(canvas, left, centerY, glyphSize)
 
         val barCount = 7
-        val startX = left + glyphSize * 1.15f
+        val startX = left + glyphSize * 0.90f
         val endX = width * 0.94f
         val step = (endX - startX) / barCount
         val barWidth = width / 34f
-        val maxHeight = height * 0.58f
+        bar.strokeWidth = barWidth
+        val bend = (width / 120f).coerceAtMost(height * 0.12f)
         for (i in 0 until barCount) {
             val local = ((phase - i * 0.075f) / 0.48f).coerceIn(0f, 1f)
             if (local <= 0f) continue
             bar.alpha = (local * 255f).toInt().coerceIn(0, 255)
             val x = startX + step * (i + 0.5f)
             val target = height * (0.20f + 0.36f * (i.toFloat() / (barCount - 1)))
-            rect.set(x - barWidth / 2f, centerY - target / 2f, x + barWidth / 2f, centerY + target / 2f)
-            canvas.drawRoundRect(rect, barWidth / 2f, barWidth / 2f, bar)
+            // Same small bow as the speaker's sound arc, not a straight bar.
+            barPath.reset()
+            barPath.moveTo(x, centerY - target / 2f)
+            barPath.quadTo(x + bend, centerY, x, centerY + target / 2f)
+            canvas.drawPath(barPath, bar)
         }
     }
 
