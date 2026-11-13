@@ -1,5 +1,20 @@
 # 交接说明
 
+## 2026-11-13：跟读 Activity 与手机批量上传
+
+- 跟读答题从 Accessibility Overlay 改为 `StudyActivity`：
+  - 独立任务栈、同进程，`taskAffinity=app.orchard.tv.study`，不进入最近任务
+  - 全屏不透明 Activity 让下层视频进入 pause；退出 `finishAndRemoveTask()` 回到原视频
+  - 从 `HomeGuardService` 的无障碍 context 启动，避免后台 Activity 限制
+  - `StudySession.active` 替代 `StudyOverlay.active`，HomeGuard 继续拦截 Home/Back/语音键
+  - 删除 `StudyOverlay.kt` 和 WindowManager overlay
+  - 音频焦点、媒体暂停、TTS 取消静音逻辑保留
+- 手机上传：
+  - 修复 `file` 同时作为文件对象和 `<input ref>` 导致的选图无反应/上传失败
+  - 独立 `fileInput` DOM ref，输入框支持 `multiple`
+  - 一次选择最多 20 张，缩略图列表、逐张进度、失败保留重试
+- 验证：Activity 可启动/关闭，`StudyActivity` 全屏显示；旧 `/api/v1/sessions`、`/api/v1/asr` 不存在；手机页和 admin JS 200。
+
 ## 现状（2026-11-12，Aerial Study 跟读分支）
 
 - **1.95.1（versionCode 136），2026-11-12 发布**：基于上游 1.95 合入当前 main 的学习分支。这个分支把旧的 5 题看图识字、先听再读、文本 ASR 判题整套删除，改为 **3 张图片跟读学习**：

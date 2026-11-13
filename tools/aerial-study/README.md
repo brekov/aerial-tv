@@ -138,6 +138,12 @@ Response:
 `GET /api/v1/images/{sha256}` accepts the TV token or the admin cookie.
 Repeat-learning image URLs are absolute and not session-scoped.
 
+## Mobile upload
+
+`/m/upload/<token>` accepts **multiple image files** in one picker. The page
+uploads them one by one through the existing single-file endpoint, keeps failed
+files selected for retry, and shows per-file progress.
+
 ## Admin
 
 `/admin/login` then `/admin`.

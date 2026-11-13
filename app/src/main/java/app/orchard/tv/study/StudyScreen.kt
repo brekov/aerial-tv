@@ -1,16 +1,14 @@
 package app.orchard.tv.study
 
-import android.accessibilityservice.AccessibilityService
 import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.res.ColorStateList
+import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.PixelFormat
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
@@ -23,12 +21,10 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
 import android.util.TypedValue
-import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewOutlineProvider
-import android.view.WindowManager
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -36,45 +32,17 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import app.orchard.tv.R
-import app.orchard.tv.guard.HomeGuardService
 import app.orchard.tv.system.DiagLog
 import java.util.concurrent.Executors
 
-/**
- * Full-screen quiz drawn by the accessibility service, over whatever app is in front.
- *
- * It does not start an Activity: the video app stays in the background, its audio is paused or
- * muted for the quiz, and removing the overlay returns to it. The recognition service resolves to
- * Aerial's own [AerialRecognitionService]; no phone microphone and no Xiaomi voice assistant.
- */
-class StudyOverlay internal constructor(private val service: HomeGuardService) {
-    companion object {
+/** Full-screen repeat-learning Activity UI; no accessibility overlay window. */
+class StudyScreen internal constructor(private val activity: Activity) {
+    private companion object {
         private const val TAG = "AerialStudy"
         private val main = Handler(Looper.getMainLooper())
-        private var instance: StudyOverlay? = null
-
-        @Volatile var active = false
-            private set
-        /** Called from StudyWatch: false when Home Guard is not bound. */
-        fun show(context: Context): Boolean {
-            if (!StudySettings.enabled) return false
-            val service = HomeGuardService.studyService() ?: return false
-            if (instance == null) {
-                val overlay = StudyOverlay(service)
-                instance = overlay
-                overlay.show()
-            }
-            return true
-        }
-
-        fun dismiss() {
-            instance?.dismissFromOutside()
-            instance = null
-        }
     }
 
-    private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private val audio = service.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var root: FrameLayout
     private lateinit var image: ImageView
@@ -107,59 +75,18 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         if (!closed) showRepeatCard()
     }
 
-    internal fun show() {
-        if (active) return
+    internal fun start() {
         if (!StudySettings.enabled) return
-        active = true
         closed = false
         index = 0
         attempt = 0
-        captureBackdropThenShow()
-    }
-
-    private fun captureBackdropThenShow() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            showBuilt(null)
-            return
-        }
-        val requested = runCatching {
-            service.takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                service.mainExecutor,
-                object : AccessibilityService.TakeScreenshotCallback {
-                    override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
-                        val bitmap = runCatching {
-                            Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
-                                ?.copy(Bitmap.Config.ARGB_8888, false)
-                        }.getOrNull()
-                        runCatching { result.hardwareBuffer.close() }
-                        main.post { if (!closed) showBuilt(bitmap) }
-                    }
-
-                    override fun onFailure(errorCode: Int) {
-                        Log.w(TAG, "study backdrop screenshot failed: $errorCode")
-                        main.post { if (!closed) showBuilt(null) }
-                    }
-                },
-            )
-        }
-        if (requested.isFailure) {
-            Log.w(TAG, "study backdrop screenshot unavailable", requested.exceptionOrNull())
-            showBuilt(null)
-        }
-    }
-
-    private fun showBuilt(backdrop: Bitmap?) {
-        if (closed) return
-        build(backdrop)
+        build()
         pauseAudio()
-        HomeGuardService.studyOverlayChanged()
         startSession()
-        DiagLog.i("study: overlay shown")
     }
 
-    private fun build(backdrop: Bitmap?) {
-        root = FrameLayout(service).apply {
+    private fun build() {
+        root = FrameLayout(activity).apply {
             setBackgroundColor(Color.TRANSPARENT)
             isFocusable = true
             isFocusableInTouchMode = true
@@ -175,47 +102,20 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                     )
             }
         }
-        val density = service.resources.displayMetrics.density
-        val screenWidth = service.resources.displayMetrics.widthPixels
+        val density = activity.resources.displayMetrics.density
+        val screenWidth = activity.resources.displayMetrics.widthPixels
 
-        // Aerial's glass is frosted wallpaper. An accessibility overlay cannot share that bitmap,
-        // so take the live frame underneath once, blur it, and use it as the glass backdrop.
-        if (backdrop != null) {
-            val background = ImageView(service).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageBitmap(backdrop)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setRenderEffect(
-                        RenderEffect.createBlurEffect(
-                            32f * density,
-                            32f * density,
-                            Shader.TileMode.CLAMP,
-                        ),
-                    )
-                }
-            }
-            background.alpha = 0.65f
-            root.addView(background, FrameLayout.LayoutParams(-1, -1))
-            root.addView(View(service).apply {
-                alpha = 0.65f
-                setBackground(GradientDrawable(
-                    GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(Color.argb(185, 9, 28, 62), Color.argb(210, 3, 10, 26)),
-                ))
-            }, FrameLayout.LayoutParams(-1, -1))
-        } else {
-            root.addView(View(service).apply {
-                setBackground(GradientDrawable(
-                    GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(Color.argb(166, 9, 28, 62), Color.argb(170, 3, 10, 26)),
-                ))
-            }, FrameLayout.LayoutParams(-1, -1))
-        }
+        root.addView(View(activity).apply {
+            setBackground(GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(7, 22, 46), Color.rgb(2, 8, 20)),
+            ))
+        }, FrameLayout.LayoutParams(-1, -1))
 
-        val column = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
+        val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
 
         // One full-width progress line at the very top. The split content starts below it.
-        progress = ProgressBar(service, null, android.R.attr.progressBarStyleHorizontal).apply {
+        progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
             max = 3
             progressTintList = ColorStateList.valueOf(Color.rgb(47, 123, 255))
@@ -224,14 +124,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
         column.addView(progress, LinearLayout.LayoutParams(-1, (5 * density).toInt().coerceAtLeast(3)))
 
-        val content = LinearLayout(service).apply {
+        val content = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
         }
 
         // Frosted-glass hint panel: title, hint/result, and the centered cue icon.
-        leftCard = LinearLayout(service).apply {
+        leftCard = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt())
             background = GradientDrawable(
@@ -243,7 +143,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             }
         }
         title = text(14f, Color.WHITE, Typeface.BOLD).apply {
-            text = service.getString(R.string.study_title)
+            text = activity.getString(R.string.study_title)
             maxLines = 1
             setSingleLine()
             ellipsize = TextUtils.TruncateAt.END
@@ -261,14 +161,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         leftCard.addView(title, LinearLayout.LayoutParams(-1, -2))
 
         val cueSize = (84 * density).toInt()
-        cue = ImageView(service).apply {
+        cue = ImageView(activity).apply {
             setPadding((10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt(), (10 * density).toInt())
             visibility = View.INVISIBLE
             contentDescription = "Study cue"
         }
-        wave = StudyWaveView(service)
-        playback = StudyPlaybackView(service)
-        val cueHolder = FrameLayout(service).apply {
+        wave = StudyWaveView(activity)
+        playback = StudyPlaybackView(activity)
+        val cueHolder = FrameLayout(activity).apply {
             addView(wave, FrameLayout.LayoutParams(-1, (96 * density).toInt(), Gravity.TOP).apply {
                 leftMargin = (10 * density).toInt()
                 rightMargin = (10 * density).toInt()
@@ -279,14 +179,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             })
             addView(cue, FrameLayout.LayoutParams(cueSize, cueSize, Gravity.CENTER))
         }
-        centerBlock = LinearLayout(service).apply {
+        centerBlock = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
         centerBlock.addView(cueHolder, LinearLayout.LayoutParams(-1, (100 * density).toInt()))
         centerBlock.addView(status, LinearLayout.LayoutParams(-1, -2))
         leftCard.addView(centerBlock, LinearLayout.LayoutParams(-1, 0, 1f))
-        val imageStage = FrameLayout(service).apply {
+        val imageStage = FrameLayout(activity).apply {
             setPadding((14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
             // No white card and no pink border: the image sits directly on the same frosted glass.
             background = GradientDrawable().apply {
@@ -294,7 +194,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 setColor(Color.TRANSPARENT)
             }
         }
-        image = ImageView(service).apply {
+        image = ImageView(activity).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.TRANSPARENT)
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> syncLeftCardHeight() }
@@ -306,7 +206,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         column.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(column, FrameLayout.LayoutParams(-1, -1))
 
-        transition = FrameLayout(service).apply {
+        transition = FrameLayout(activity).apply {
             visibility = View.GONE
             alpha = 0f
             setBackground(GradientDrawable(
@@ -314,33 +214,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 intArrayOf(Color.argb(230, 8, 25, 55), Color.argb(240, 2, 9, 24)),
             ))
             addView(text(34f, Color.WHITE, Typeface.BOLD).apply {
-                text = service.getString(R.string.study_repeat_learning)
+                text = activity.getString(R.string.study_repeat_learning)
                 gravity = Gravity.CENTER
             }, FrameLayout.LayoutParams(-1, -1))
         }
         root.addView(transition, FrameLayout.LayoutParams(-1, -1))
 
-        // Aerial pages use a translucent dark glass. Accessibility overlays cannot call Compose's
-        // liquidGlass, so use a translucent gradient with a lit rim and try native blur behind.
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DIM_BEHIND,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            dimAmount = 0.10f
-            title = "Aerial study"
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-            lp.blurBehindRadius = (28 * density).toInt()
-        }
-        wm.addView(root, lp)
+        activity.setContentView(root)
         root.requestFocus()
     }
 
@@ -368,7 +248,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         }
     }
 
-    private fun text(size: Float, color: Int, style: Int) = TextView(service).apply {
+    private fun text(size: Float, color: Int, style: Int) = TextView(activity).apply {
         textSize = size
         setTextColor(color)
         typeface = Typeface.create(Typeface.DEFAULT, style)
@@ -427,7 +307,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     }
 
     private fun startSession() {
-        status.text = service.getString(R.string.study_loading)
+        status.text = activity.getString(R.string.study_loading)
         status.visibility = View.VISIBLE
         io.execute {
             val result = runCatching { StudyClient.startRepeatSession() }
@@ -461,7 +341,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         layer.scaleY = 0.96f
         layer.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420).withEndAction {
             if (closed) return@withEndAction
-            StudyVoice.speak(service, service.getString(R.string.study_repeat_learning)) {
+            StudyVoice.speak(activity, activity.getString(R.string.study_repeat_learning)) {
                 main.post {
                     if (closed) return@post
                     layer.animate().alpha(0f).setDuration(260).withEndAction {
@@ -484,14 +364,14 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         centerBlock.visibility = View.VISIBLE
         progress.max = s.cards.size
         progress.progress = index + 1
-        title.text = service.getString(R.string.study_repeat_learning)
+        title.text = activity.getString(R.string.study_repeat_learning)
         status.visibility = View.VISIBLE
         status.setTextColor(Color.WHITE)
-        status.text = service.getString(R.string.study_repeat_progress, index + 1, s.cards.size)
+        status.text = activity.getString(R.string.study_repeat_progress, index + 1, s.cards.size)
         image.setImageBitmap(null)
         image.animate().cancel()
         image.alpha = 0f
-        image.translationX = 24f * service.resources.displayMetrics.density
+        image.translationX = 24f * activity.resources.displayMetrics.density
         if (card.imageUrl == null) {
             speakCard(card)
         } else io.execute {
@@ -508,9 +388,9 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
     private fun speakCard(card: StudyClient.RepeatCard) {
         if (closed) return
-        status.text = service.getString(R.string.study_repeat_progress, index + 1, (repeatSession?.cards?.size ?: 3))
+        status.text = activity.getString(R.string.study_repeat_progress, index + 1, (repeatSession?.cards?.size ?: 3))
         showCue(Cue.LISTEN)
-        StudyVoice.speakSpelling(service, card.word, card.letters) {
+        StudyVoice.speakSpelling(activity, card.word, card.letters) {
             main.post { if (!closed) listenRepeat() }
         }
     }
@@ -519,7 +399,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         if (closed) return
         stopSpeech()
         showCue(Cue.READY)
-        status.text = service.getString(R.string.study_mic_ready)
+        status.text = activity.getString(R.string.study_mic_ready)
         status.setTextColor(Color.rgb(130, 220, 160))
         status.visibility = View.VISIBLE
         startRecognizer(listenGeneration)
@@ -534,7 +414,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             return
         }
         showCue(Cue.PROCESS)
-        status.text = service.getString(R.string.study_recognizing)
+        status.text = activity.getString(R.string.study_recognizing)
         status.setTextColor(Color.LTGRAY)
         main.removeCallbacks(timeout)
         io.execute {
@@ -543,13 +423,13 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 if (closed) return@post
                 result.onSuccess { r ->
                     if (r.retry) {
-                        status.text = r.feedback.ifBlank { service.getString(R.string.study_voice_retry) }
+                        status.text = r.feedback.ifBlank { activity.getString(R.string.study_voice_retry) }
                         status.visibility = View.VISIBLE
                         showCue(Cue.READY)
                         main.postDelayed({ if (!closed) listenRepeat() }, 700)
                         return@post
                     }
-                    val shown = if (r.score > 0) service.getString(R.string.study_score, r.score) else r.feedback
+                    val shown = if (r.score > 0) activity.getString(R.string.study_score, r.score) else r.feedback
                     status.text = shown
                     status.setTextColor(Color.WHITE)
                     status.visibility = View.VISIBLE
@@ -576,15 +456,15 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
 
     private fun startRecognizer(generation: Int) {
         if (closed || generation != listenGeneration) return
-        val component = ComponentName(service, AerialRecognitionService::class.java)
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(service, component)
+        val component = ComponentName(activity, AerialRecognitionService::class.java)
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(activity, component)
         speech = recognizer
         listening = true
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: android.os.Bundle?) {
                 if (closed || generation != listenGeneration) return
                 showCue(Cue.READY)
-                status.text = service.getString(R.string.study_mic_ready)
+                status.text = activity.getString(R.string.study_mic_ready)
                 status.setTextColor(Color.rgb(130, 220, 160))
                 status.visibility = View.VISIBLE
             }
@@ -592,7 +472,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             override fun onBeginningOfSpeech() {
                 if (closed || generation != listenGeneration) return
                 showCue(Cue.SPEAK)
-                status.text = service.getString(R.string.study_mic_listening)
+                status.text = activity.getString(R.string.study_mic_listening)
                 status.setTextColor(Color.rgb(92, 164, 255))
                 status.visibility = View.VISIBLE
             }
@@ -604,7 +484,7 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
             override fun onEndOfSpeech() {
                 if (closed || generation != listenGeneration) return
                 showCue(Cue.PROCESS)
-                status.text = service.getString(R.string.study_mic_processing)
+                status.text = activity.getString(R.string.study_mic_processing)
                 status.setTextColor(Color.LTGRAY)
                 status.visibility = View.VISIBLE
                 StudyCue.end()
@@ -644,11 +524,11 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     }
 
     private fun announce(res: Int, display: String? = null, then: (() -> Unit)? = null) {
-        val text = service.getString(res)
+        val text = activity.getString(res)
         status.setTextColor(Color.WHITE)
         status.text = display ?: text
         status.visibility = View.VISIBLE
-        StudyVoice.speak(service, text) {
+        StudyVoice.speak(activity, text) {
             main.post { if (!closed) then?.invoke() }
         }
     }
@@ -679,7 +559,6 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
     private fun finish(passed: Boolean) {
         if (closed) return
         closed = true
-        active = false
         main.removeCallbacks(timeout)
         main.removeCallbacks(pass)
         stopSpeech()
@@ -689,16 +568,11 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
         StudyVoice.stop()
         if (passed) StudySettings.resetWatch()
         main.post {
-            remove()
+            StudySession.active = false
             restoreAudio()
-            HomeGuardService.studyOverlayChanged()
+            activity.finishAndRemoveTask()
         }
         DiagLog.i(if (passed) "study: passed" else "study: closed")
-        instance = null
-    }
-
-    private fun remove() {
-        runCatching { wm.removeView(root) }
     }
 
     private fun stopSpeech() {
@@ -753,9 +627,5 @@ class StudyOverlay internal constructor(private val service: HomeGuardService) {
                 if (!audio.isMusicActive()) dispatchMediaKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY)
             }, 350)
         }
-    }
-
-    fun dismissFromOutside() {
-        if (!closed) finish(false)
     }
 }

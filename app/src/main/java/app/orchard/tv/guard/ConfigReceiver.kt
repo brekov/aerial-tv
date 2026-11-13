@@ -6,7 +6,7 @@ import android.content.Intent
 import app.orchard.tv.apps.TileSheet
 import app.orchard.tv.settings.AerialSettings
 import app.orchard.tv.settings.Restricted
-import app.orchard.tv.study.StudyOverlay
+import app.orchard.tv.study.StudyActivity
 import app.orchard.tv.study.StudySettings
 import app.orchard.tv.study.StudyMicProbe
 import app.orchard.tv.study.StudyWatch
@@ -79,8 +79,8 @@ class ConfigReceiver : BroadcastReceiver() {
             intent.getStringExtra("mimo_voice")?.let { StudySettings.mimoVoice = it }
             if (intent.hasExtra("study_interval_min")) StudySettings.intervalMinutes = intent.getIntExtra("study_interval_min", 6)
             StudyWatch.start(context)
-            if (!StudySettings.enabled) StudyOverlay.dismiss()
-            val shown = intent.getBooleanExtra("study_test", false) && StudyOverlay.show(context)
+            if (!StudySettings.enabled) StudyActivity.dismiss()
+            val shown = intent.getBooleanExtra("study_test", false) && StudyActivity.launch(context)
             resultData = StudySettings.diagnostic() + if (shown) " overlay=shown" else ""
             return
         }

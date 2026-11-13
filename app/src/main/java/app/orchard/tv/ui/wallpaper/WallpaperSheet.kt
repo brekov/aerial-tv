@@ -102,7 +102,7 @@ import app.orchard.tv.ui.theme.Type
 import app.orchard.tv.wallpaper.DailySource
 import app.orchard.tv.wallpaper.PhoneServer
 import app.orchard.tv.study.StudyClient
-import app.orchard.tv.study.StudyOverlay
+import app.orchard.tv.study.StudyActivity
 import app.orchard.tv.study.StudySettings
 import app.orchard.tv.study.StudyWatch
 import app.orchard.tv.wallpaper.AerialFormats
@@ -277,7 +277,7 @@ fun WallpaperSheet(
                                     if (on) {
                                         StudyWatch.start(context)
                                     } else {
-                                        StudyOverlay.dismiss()
+                                        StudyActivity.dismiss()
                                     }
                                 }
                             }
