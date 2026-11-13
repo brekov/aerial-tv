@@ -32,7 +32,7 @@ class StudyPlaybackView(context: Context) : View(context) {
     private val speakerPath = Path()
     private var phase = 0f
     private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 2_100
+        duration = 3_300
         repeatCount = ValueAnimator.INFINITE
         addUpdateListener { phase = it.animatedValue as Float; invalidate() }
     }
@@ -68,7 +68,7 @@ class StudyPlaybackView(context: Context) : View(context) {
         val startX = left + glyphSize * 1.15f
         val endX = width * 0.94f
         val step = (endX - startX) / barCount
-        val barWidth = (bar.strokeWidth.takeIf { it > 0f } ?: (width / 34f)).coerceAtLeast(width / 42f)
+        val barWidth = width / 23f
         bar.strokeWidth = barWidth
         val maxHeight = height * 0.58f
         for (i in 0 until barCount) {
