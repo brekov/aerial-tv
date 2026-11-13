@@ -32,6 +32,8 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import app.orchard.tv.R
+import app.orchard.tv.wallpaper.Wallpapers
+import androidx.compose.ui.graphics.asAndroidBitmap
 import app.orchard.tv.system.DiagLog
 import java.util.concurrent.Executors
 
@@ -105,12 +107,28 @@ class StudyScreen internal constructor(private val activity: Activity) {
         val density = activity.resources.displayMetrics.density
         val screenWidth = activity.resources.displayMetrics.widthPixels
 
-        root.addView(View(activity).apply {
-            setBackground(GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(7, 22, 46), Color.rgb(2, 8, 20)),
-            ))
-        }, FrameLayout.LayoutParams(-1, -1))
+        // Match Home's frosted glass: use the same small blurred wallpaper behind the lesson.
+        runCatching { Wallpapers.init(activity.applicationContext) }
+        val glass = Wallpapers.frosted ?: Wallpapers.backdrop
+        if (glass != null) {
+            root.addView(ImageView(activity).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageBitmap(glass.asAndroidBitmap())
+            }, FrameLayout.LayoutParams(-1, -1))
+            root.addView(View(activity).apply {
+                setBackground(GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.argb(105, 4, 14, 34), Color.argb(150, 2, 7, 18)),
+                ))
+            }, FrameLayout.LayoutParams(-1, -1))
+        } else {
+            root.addView(View(activity).apply {
+                setBackground(GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.rgb(7, 22, 46), Color.rgb(2, 8, 20)),
+                ))
+            }, FrameLayout.LayoutParams(-1, -1))
+        }
 
         val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
 
