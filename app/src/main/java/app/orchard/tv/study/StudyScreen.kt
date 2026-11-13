@@ -108,7 +108,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         // The window itself is translucent and blurred behind on Android 12+; this only adds a
         // dark scrim so the white cards stay readable over the blurred foreground app.
         root.addView(View(activity).apply {
-            setBackgroundColor(Color.argb(48, 2, 8, 20))
+            setBackgroundColor(StudyStyle.Scrim)
         }, FrameLayout.LayoutParams(-1, -1))
 
         val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
@@ -117,8 +117,8 @@ class StudyScreen internal constructor(private val activity: Activity) {
         progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
             max = 3
-            progressTintList = ColorStateList.valueOf(Color.rgb(47, 123, 255))
-            progressBackgroundTintList = ColorStateList.valueOf(Color.argb(90, 255, 255, 255))
+            progressTintList = ColorStateList.valueOf(StudyStyle.Focus)
+            progressBackgroundTintList = ColorStateList.valueOf(StudyStyle.Hairline)
             minimumHeight = (5 * density).toInt().coerceAtLeast(3)
         }
         column.addView(progress, LinearLayout.LayoutParams(-1, (5 * density).toInt().coerceAtLeast(3)))
@@ -133,22 +133,18 @@ class StudyScreen internal constructor(private val activity: Activity) {
         leftCard = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt(), (22 * density).toInt())
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(238, 40, 105, 200), Color.argb(220, 5, 20, 48)),
-            ).apply {
-                cornerRadius = 30 * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(80, 125, 200, 255))
-            }
+            background = StudyStyle.panel(activity, 30f)
         }
-        title = text(14f, Color.WHITE, Typeface.BOLD).apply {
+        title = text(15f, StudyStyle.Label, Typeface.BOLD).apply {
             text = activity.getString(R.string.study_title)
+            typeface = StudyStyle.typeface(activity, bold = true)
             maxLines = 1
             setSingleLine()
             ellipsize = TextUtils.TruncateAt.END
             setPadding(0, (12 * density).toInt(), 0, 0)
         }
-        status = text(17f, Color.rgb(130, 230, 160), Typeface.BOLD).apply {
+        status = text(19f, StudyStyle.Green, Typeface.BOLD).apply {
+            typeface = StudyStyle.typeface(activity, bold = true)
             maxWidth = (screenWidth * 0.24f).toInt()
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
@@ -208,11 +204,8 @@ class StudyScreen internal constructor(private val activity: Activity) {
         transition = FrameLayout(activity).apply {
             visibility = View.GONE
             alpha = 0f
-            setBackground(GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(230, 8, 25, 55), Color.argb(240, 2, 9, 24)),
-            ))
-            addView(text(34f, Color.WHITE, Typeface.BOLD).apply {
+            setBackground(StudyStyle.panel(activity, 0f))
+            addView(text(26f, StudyStyle.Label, Typeface.BOLD).apply {
                 text = activity.getString(R.string.study_repeat_learning)
                 gravity = Gravity.CENTER
             }, FrameLayout.LayoutParams(-1, -1))
@@ -250,7 +243,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
     private fun text(size: Float, color: Int, style: Int) = TextView(activity).apply {
         textSize = size
         setTextColor(color)
-        typeface = Typeface.create(Typeface.DEFAULT, style)
+        typeface = StudyStyle.typeface(activity, bold = style == Typeface.BOLD)
     }
 
     /** Big, animated non-text cue so a child can see whether to listen, speak or wait. */
@@ -269,8 +262,8 @@ class StudyScreen internal constructor(private val activity: Activity) {
         val result = mode == Cue.CHECK || mode == Cue.CROSS
         cue.visibility = if (result) View.VISIBLE else View.INVISIBLE
         cue.colorFilter = when (mode) {
-            Cue.CHECK -> android.graphics.PorterDuffColorFilter(Color.rgb(48, 209, 88), android.graphics.PorterDuff.Mode.SRC_IN)
-            Cue.CROSS -> android.graphics.PorterDuffColorFilter(Color.rgb(255, 69, 58), android.graphics.PorterDuff.Mode.SRC_IN)
+            Cue.CHECK -> android.graphics.PorterDuffColorFilter(StudyStyle.Green, android.graphics.PorterDuff.Mode.SRC_IN)
+            Cue.CROSS -> android.graphics.PorterDuffColorFilter(StudyStyle.Red, android.graphics.PorterDuff.Mode.SRC_IN)
             else -> null
         }
         val showPlayback = mode == Cue.LISTEN
@@ -376,7 +369,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         progress.progress = index + 1
         title.text = activity.getString(R.string.study_repeat_learning)
         status.visibility = View.VISIBLE
-        status.setTextColor(Color.WHITE)
+        status.setTextColor(StudyStyle.Label)
         status.text = activity.getString(R.string.study_repeat_progress, index + 1, s.cards.size)
         image.setImageBitmap(null)
         image.animate().cancel()
@@ -410,7 +403,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         stopSpeech()
         showCue(Cue.READY)
         status.text = activity.getString(R.string.study_mic_ready)
-        status.setTextColor(Color.rgb(130, 220, 160))
+        status.setTextColor(StudyStyle.Green)
         status.visibility = View.VISIBLE
         startRecognizer(listenGeneration)
     }
@@ -425,7 +418,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
         }
         showCue(Cue.PROCESS)
         status.text = activity.getString(R.string.study_recognizing)
-        status.setTextColor(Color.LTGRAY)
+        status.setTextColor(StudyStyle.Secondary)
         main.removeCallbacks(timeout)
         io.execute {
             val result = runCatching { StudyClient.submitRepeatAttempt(s.id, card.id, wav) }
@@ -441,7 +434,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
                     }
                     val shown = if (r.score > 0) activity.getString(R.string.study_score, r.score) else r.feedback
                     status.text = shown
-                    status.setTextColor(Color.WHITE)
+                    status.setTextColor(StudyStyle.Label)
                     status.visibility = View.VISIBLE
                     showCue(if (r.score >= 60) Cue.CHECK else Cue.CROSS)
                     if (r.finished) {
@@ -475,7 +468,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
                 if (closed || generation != listenGeneration) return
                 showCue(Cue.READY)
                 status.text = activity.getString(R.string.study_mic_ready)
-                status.setTextColor(Color.rgb(130, 220, 160))
+                status.setTextColor(StudyStyle.Green)
                 status.visibility = View.VISIBLE
             }
 
@@ -483,7 +476,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
                 if (closed || generation != listenGeneration) return
                 showCue(Cue.SPEAK)
                 status.text = activity.getString(R.string.study_mic_listening)
-                status.setTextColor(Color.rgb(92, 164, 255))
+                status.setTextColor(StudyStyle.Focus)
                 status.visibility = View.VISIBLE
             }
 
@@ -495,7 +488,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
                 if (closed || generation != listenGeneration) return
                 showCue(Cue.PROCESS)
                 status.text = activity.getString(R.string.study_mic_processing)
-                status.setTextColor(Color.LTGRAY)
+                status.setTextColor(StudyStyle.Secondary)
                 status.visibility = View.VISIBLE
                 StudyCue.end()
             }
@@ -535,7 +528,7 @@ class StudyScreen internal constructor(private val activity: Activity) {
 
     private fun announce(res: Int, display: String? = null, then: (() -> Unit)? = null) {
         val text = activity.getString(res)
-        status.setTextColor(Color.WHITE)
+        status.setTextColor(StudyStyle.Label)
         status.text = display ?: text
         status.visibility = View.VISIBLE
         StudyVoice.speak(activity, text) {

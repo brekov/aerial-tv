@@ -19,11 +19,11 @@ class StudyPlaybackView(context: Context) : View(context) {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
-        color = Color.rgb(91, 200, 255)
+        color = StudyStyle.Focus
     }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.rgb(91, 200, 255)
+        color = StudyStyle.Focus
     }
     private val rect = RectF()
     private val curve = Path()

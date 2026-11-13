@@ -11,7 +11,7 @@ import kotlin.math.sin
 
 /** Small animated bars used while the TV is listening. The phase animates; the level is live RMS. */
 class StudyWaveView(context: Context) : View(context) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(91, 200, 255) }
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = StudyStyle.Focus }
     private val bars = 9
     private val rect = RectF()
     private var phase = 0f
