@@ -14,9 +14,7 @@ import android.view.View
  */
 class StudyPlaybackView(context: Context) : View(context) {
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
+        style = Paint.Style.FILL
         color = StudyStyle.Focus
     }
     private val speaker = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -68,8 +66,7 @@ class StudyPlaybackView(context: Context) : View(context) {
         val startX = left + glyphSize * 1.15f
         val endX = width * 0.94f
         val step = (endX - startX) / barCount
-        val barWidth = (width / 34f).coerceAtLeast(width / 42f)
-        bar.strokeWidth = barWidth
+        val barWidth = width / 34f
         val maxHeight = height * 0.58f
         for (i in 0 until barCount) {
             val local = ((phase - i * 0.075f) / 0.48f).coerceIn(0f, 1f)
