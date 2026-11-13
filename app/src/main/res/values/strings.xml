@@ -398,4 +398,5 @@
     <string name="study_phone_refresh_short">Refresh</string>
     <string name="study_repeat_learning">Repeat learning</string>
     <string name="study_repeat_progress">Repeat learning · %1$d/%2$d</string>
+    <string name="study_voice_no_cards">No active study cards. Study is turned off.</string>
 </resources>

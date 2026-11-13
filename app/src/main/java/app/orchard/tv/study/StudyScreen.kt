@@ -337,17 +337,28 @@ class StudyScreen internal constructor(private val activity: Activity) {
                     attempt = 0
                     if (s.cards.isEmpty()) {
                         showCue(Cue.CROSS)
-                        announce(R.string.study_voice_error) { retryLater() }
+                        announceNoCardsAndStop()
                     } else {
                         transitionIntoLearning()
                     }
                 }.onFailure {
                     Log.w(TAG, "repeat session failed", it)
                     showCue(Cue.CROSS)
-                    announce(R.string.study_voice_error) { retryLater() }
+                    if (it.message?.contains("HTTP 409") == true) {
+                        announceNoCardsAndStop()
+                    } else {
+                        announce(R.string.study_voice_error) { retryLater() }
+                    }
                 }
             }
         }
+    }
+
+    private fun announceNoCardsAndStop() {
+        // No active cards is a configuration error, not a transient network error. Say it once
+        // and close the feature so StudyWatch cannot open it again forever.
+        StudySettings.enabled = false
+        announce(R.string.study_voice_no_cards) { finish(false) }
     }
 
     private fun transitionIntoLearning() {

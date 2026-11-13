@@ -14,6 +14,8 @@
   - 独立 `fileInput` DOM ref，输入框支持 `multiple`
   - 一次选择最多 20 张，缩略图列表、逐张进度、失败保留重试
 - 验证：Activity 可启动/关闭，`StudyActivity` 全屏显示；旧 `/api/v1/sessions`、`/api/v1/asr` 不存在；手机页和 admin JS 200。
+- 409 处理：没有 3 张 active 图片题时只播报一次，关闭学习开关并退出 Activity，不再每 4 秒重试。
+- 背景：Activity 使用主桌面同一张 `Wallpapers.frosted` 毛玻璃壁纸，没有可用壁纸时回退深色背景。
 
 ## 现状（2026-11-12，Aerial Study 跟读分支）
 
