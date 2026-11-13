@@ -626,9 +626,10 @@ def trigger_generation(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     service: GenerationService = request.app.state.generation
-    material_id = payload.materialId or (payload.materialIds[0] if payload.materialIds else None)
+    material_ids = payload.materialIds or ([payload.materialId] if payload.materialId else [])
     job = service.create_job(
-        material_id=material_id,
+        material_id=material_ids[0] if material_ids else None,
+        material_ids=material_ids,
         provider=payload.provider,
         lang=payload.lang,
         count=payload.count,

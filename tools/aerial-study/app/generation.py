@@ -56,6 +56,7 @@ class GenerationService:
         self,
         *,
         material_id: str | None,
+        material_ids: list[str] | None = None,
         provider: str | None = None,
         lang: str = "zh",
         count: int = 5,
@@ -70,11 +71,20 @@ class GenerationService:
         if not type_info:
             raise GenerationError("unknown question type", status_code=400)
         requires_image = bool(type_info.get("requires_image")) or question_type_code == "word_image"
-        material = get_image_material(self.settings, str(material_id)) if material_id else None
-        if requires_image and not material:
+        requested_ids = material_ids or ([material_id] if material_id else [])
+        materials: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for requested in requested_ids:
+            material = get_image_material(self.settings, str(requested))
+            if not material:
+                raise GenerationError(f"material not found: {requested}", status_code=404)
+            if material["kind"] != "image":
+                raise GenerationError("material must be an image", status_code=400)
+            if material["sha256"] not in seen_ids:
+                seen_ids.add(material["sha256"])
+                materials.append(material)
+        if requires_image and not materials:
             raise GenerationError("this question type requires an image material", status_code=400)
-        if material and material["kind"] != "image":
-            raise GenerationError("material must be an image", status_code=400)
         lang = (lang or "zh").strip().lower()
         if lang not in {"zh", "en"}:
             raise GenerationError("lang must be 'zh' or 'en'", status_code=400)
@@ -83,8 +93,12 @@ class GenerationService:
         except (TypeError, ValueError):
             raise GenerationError("count must be an integer", status_code=400) from None
         count = max(1, min(count, 20))
-        if question_type_code in {"word_image", "word_image_choice"}:
-            count = min(count, 1) if question_type_code == "word_image" else count
+        # One selected image produces one question. With several images, count is the
+        # number of images rather than a request for several questions per image.
+        per_image_count = 1 if len(materials) > 1 else count
+        if question_type_code == "word_image":
+            per_image_count = 1
+        effective_count = len(materials) if len(materials) > 1 else per_image_count
 
         provider_name = (provider or "").strip().lower()
         try:
@@ -117,10 +131,10 @@ class GenerationService:
                     job_id,
                     provider_name,
                     config.model,
-                    material["sha256"] if material else None,
+                    materials[0]["sha256"] if materials else None,
                     question_type_code,
                     lang,
-                    count,
+                    effective_count,
                     status_value,
                     error,
                     requested_by,
@@ -131,7 +145,7 @@ class GenerationService:
                     age_group_id,
                     subject_id,
                     answer_mode or type_info.get("answer_mode") or "voice",
-                    json_dumps(params or {}),
+                    json_dumps({**(params or {}), "materialIds": [m["sha256"] for m in materials]}),
                 ),
             )
         if status_value == "failed":
@@ -158,10 +172,11 @@ class GenerationService:
                 (started_at, job_id),
             )
         try:
-            material = get_image_material(self.settings, str(job["materialId"])) if job.get("materialId") else None
+            job_params = job.get("params") or {}
+            material_ids = job_params.get("materialIds") or ([job.get("materialId")] if job.get("materialId") else [])
+            materials = [m for m in (get_image_material(self.settings, str(mid)) for mid in material_ids) if m]
             type_code = job.get("questionType") or "word_image"
             type_info = question_type(self.settings, type_code) or {}
-            image_bytes = read_material_bytes(self.settings, material) if material else None
             age_label = subject_label = ""
             with read_session(self.settings) as conn:
                 if job.get("ageGroupId"):
@@ -170,60 +185,67 @@ class GenerationService:
                 if job.get("subjectId"):
                     row = conn.execute("SELECT name FROM subjects WHERE id = ?", (job["subjectId"],)).fetchone()
                     subject_label = row["name"] if row else ""
-            if type_code == "word_image" and material:
-                items, config = generate_word_image_questions(
-                    self.settings,
-                    provider_name=job["provider"],
-                    image_bytes=image_bytes or b"",
-                    mime_type=material["content_type"],
-                    lang=job["lang"],
-                    count=int(job["count"]),
-                )
-            else:
-                items, config = generate_choice_questions(
-                    self.settings,
-                    provider_name=job["provider"],
-                    question_type=type_code,
-                    lang=job["lang"],
-                    count=int(job["count"]),
-                    age_label=age_label,
-                    subject_label=subject_label,
-                    image_bytes=image_bytes,
-                    mime_type=(material or {}).get("content_type", ""),
-                    material_title=(material or {}).get("title", ""),
-                )
+            if not materials:
+                materials = [None]  # text/math types can be generated without an image
             created: list[dict[str, Any]] = []
-            for item in items:
-                options = item.get("options") or []
-                question = create_question(
-                    self.settings,
-                    prompt=item["prompt"],
-                    answer=item["answer"],
-                    question_type=type_code,
-                    lang=job["lang"],
-                    image_id=(material or {}).get("sha256"),
-                    options=options,
-                    explanation=item.get("explanation", ""),
-                    difficulty=item.get("difficulty", 1),
-                    status_value="draft",
-                    source="ai",
-                    meta={
-                        "generationJobId": job_id,
-                        "provider": config.name,
-                        "model": config.model,
-                    },
-                    age_group_id=job.get("ageGroupId"),
-                    subject_id=job.get("subjectId"),
-                    answer_mode=type_info.get("answer_mode") or job.get("answerMode") or "voice",
-                    changed_by=f"ai:{config.name}",
-                    change_note=f"generated by {config.name}/{config.model}",
-                )
-                created.append(question_admin_dict(self.settings, question))
+            config = None
+            for material in materials:
+                image_bytes = read_material_bytes(self.settings, material) if material else None
+                count_for_call = 1 if len(materials) > 1 else int(job["count"])
+                if type_code == "word_image" and material:
+                    items, call_config = generate_word_image_questions(
+                        self.settings,
+                        provider_name=job["provider"],
+                        image_bytes=image_bytes or b"",
+                        mime_type=material["content_type"],
+                        lang=job["lang"],
+                        count=count_for_call,
+                    )
+                else:
+                    items, call_config = generate_choice_questions(
+                        self.settings,
+                        provider_name=job["provider"],
+                        question_type=type_code,
+                        lang=job["lang"],
+                        count=count_for_call,
+                        age_label=age_label,
+                        subject_label=subject_label,
+                        image_bytes=image_bytes,
+                        mime_type=(material or {}).get("content_type", ""),
+                        material_title=(material or {}).get("title", ""),
+                    )
+                config = call_config
+                for item in items:
+                    options = item.get("options") or []
+                    question = create_question(
+                        self.settings,
+                        prompt=item["prompt"],
+                        answer=item["answer"],
+                        question_type=type_code,
+                        lang=job["lang"],
+                        image_id=(material or {}).get("sha256"),
+                        options=options,
+                        explanation=item.get("explanation", ""),
+                        difficulty=item.get("difficulty", 1),
+                        status_value="draft",
+                        source="ai",
+                        meta={
+                            "generationJobId": job_id,
+                            "provider": call_config.name,
+                            "model": call_config.model,
+                        },
+                        age_group_id=job.get("ageGroupId"),
+                        subject_id=job.get("subjectId"),
+                        answer_mode=type_info.get("answer_mode") or job.get("answerMode") or "voice",
+                        changed_by=f"ai:{call_config.name}",
+                        change_note=f"generated by {call_config.name}/{call_config.model}",
+                    )
+                    created.append(question_admin_dict(self.settings, question))
             result = {
                 "questionIds": [question["id"] for question in created],
                 "questions": created,
-                "provider": config.name,
-                "model": config.model,
+                "provider": config.name if config else "",
+                "model": config.model if config else "",
             }
             with session(self.settings) as conn:
                 conn.execute(
